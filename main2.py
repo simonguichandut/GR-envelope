@@ -1,8 +1,8 @@
 ''' Main code to calculate expanded envelopes '''
 
 from scipy.optimize import brentq
-from scipy.integrate import odeint
-from scipy.interpolate import interp1d
+from scipy.integrate import odeint,solve_ivp
+from scipy.interpolate import interp1d,InterpolatedUnivariateSpline
 import numpy as np
 from numpy import linspace, sqrt, log10, array, pi
 from IO import load_params
@@ -33,7 +33,8 @@ g = GM/(RNS*1e5)**2 * ZZ
 P_inner = g*y_inner
 
 T_inner = 10**8.5
-rmin = 1e5
+rg = 2*GM/c**2 # gravitationnal radius
+
 
 # -------------------------------------------- Microphysics ----------------------------------------------------
 
@@ -88,7 +89,6 @@ def photosphere(f0):
         # return T**4*kappa(T) - GM*c/(Rphot**2*sigmarad) * Swz(Rphot) * (1-10**f0)
         return kappa(T) - (GM*c/(Rphot**2*sigmarad) * Swz(Rphot) * (1-10**f0))/T**4
 
-
     Tkeep1, Tkeep2 = 0.0, 0.0
     npoints = 10
     while Tkeep1 == 0 or Tkeep2 == 0:
@@ -102,21 +102,17 @@ def photosphere(f0):
         npoints += 10
 
     T = brentq(Teff_eq, Tkeep1, Tkeep2, xtol=1e-10, maxiter=10000)
-    # print(Teff_eq(T))
     rho = 2/3 * mu*mp/(kB*T) * grav(Rphot)/kappa(T) * 10**f0
     Linf = 4*pi*Rphot**2*sigmarad*T**4* (Swz(Rphot)**(-2))
-    # Linf = (1-10**f0) * 4*pi*c*GM/kappa(T) * Swz(Rphot)**(-1)
-    # Linf = 4*pi*c*GM/kappa(T)*Swz(Rphot)**(-1)
-    # Linf = LEdd*Swz(Rphot)**(-1)
 
     return rho,T,Linf
 
 # -------------------------------------------- Calculate derivatives ---------------------------------------
 
-def dr(inic, r):
+def derivs(r, Y):
     ''' Calculates the derivatives of rho and T with r as the independent variable '''
 
-    rho,T = inic[:2]
+    rho,T = Y[:2]
     P,b = pressure(rho,T) , Beta(rho,T)
     delr = del_rad(rho, T, r)
 
@@ -125,162 +121,145 @@ def dr(inic, r):
     drho_dr = rho/P * dP_dr * (1 - (4-3*b)*delr)/b
     dT_dr   = T/P   * dP_dr * delr
 
-    # s1 = '+' if drho_dr>0 else '-'
-    # s2 = '+' if dT_dr>0 else '-'
-    # print(s1,s2)
-
     if Del(rho,T,r) == del_ad: print('WARNING : CONVECTIVE')
 
     return [drho_dr, dT_dr]
 
 # ---------------------------------------------- Integration -----------------------------------------------
 
-def innerIntegration(r, rhophot, Tphot, returnResult=False):
-    ''' Integrates in from the photosphere, using r as the independent variable, until rho=rhomax
+def Shoot(rspan, rhophot, Tphot, returnResult=False):
+    ''' Integrates in from the photosphere, using r as the independent variable, until T=Tbase
         We want to match the location of p=p_inner to the NS radius '''
 
-    if verbose:
-        print('\n**** Running innerIntegration ****')
-
     inic = [rhophot, Tphot]
-    # with stdout_redirected(): 
-    #     result,info = odeint(dr, inic, r, atol=1e-10, 
-    #                     rtol=1e-10,full_output=True)  # contains rho(r) and T(r)
-    result,info = odeint(dr, inic, r, full_output=True)  # contains rho(r) and T(r)
-        # (we can stop integrating when rho>1e10 , but need to change ode method)
-    # print(info)
 
-    flag = 0
+    def hit_innerTemp(t, y): return y[1]-T_inner
+    hit_innerTemp.terminal = True # stop integrating at this point 
 
-    # Removing NaNs
-    nanflag=0
-    if True in np.isnan(result):
-        nanflag=1
-        firstnan = min([np.argwhere(np.isnan(result[:, i]) == True)[0][0]
-                        for i in (0, 1) if True in np.isnan(result[:, i])])
-        result = result[:firstnan]
-        r = r[:firstnan]
-        if verbose:
-            print('Inner integration : NaNs reached after r = %.2e'%r[firstnan-1])
+    sol = solve_ivp(derivs, rspan, inic, method='Radau',events = hit_innerTemp)
 
-    # INNER B.C   :  PRESSURE
-#     rho,T = result[:, 0], result[:, 1]
-#     P = pressure(rho,T)
+    r = sol.t
+    r,rho,T = sol.t , sol.y[0] , sol.y[1]
 
-#     # Checking that we reached surface pressure
-#     if P[-1]<P_inner:
-#         flag = 1
-#         if verbose:
-#             if nanflag: print('Surface pressure never reached (NaNs before reaching p_inner)')
-#             else:       print('Surface pressure never reached (max rho too small)')
-
-#     else: # linear interpolation to find the exact radius where P=P_inner
-#         x = np.argmin(np.abs(P_inner-P))
-#         a,b = (x,x+1) if P_inner-P[x] > 0 else (x-1,x)
-#         func = interp1d([P[a],P[b]],[r[a],r[b]])
-#         RNS_calc = func(P_inner)
-
-#         result = result[:b]
-
-# #        print(RNS_calc)
-# #        import matplotlib.pyplot as plt
-# #        plt.figure()
-# #        plt.plot(r,P,'k.-')
-# #        plt.plot([r[0],r[-1]],[P_inner,P_inner],'k--')
-# #        plt.plot([r[a],r[b]],[P[a],P[b]],'ro')
-# #        plt.plot([RNS_calc],[P_inner],'bo')
-
-    # INNER B.C   :  TEMPERATURE
-    rho,T = result[:,0],result[:, 1]
-
-    # Checking that we reached surface temperature
-    if max(T)<T_inner:
-        flag = 1
-        if verbose:
-            if nanflag: print('Surface temperature never reached (NaNs before reaching T_inner)')
-            else:       print('Surface temperature never reached (min r too big)')
-            print('Max temperature reached %.3e K at radius %.1f'%(max(T),r[T==max(T)]/1e5))
-
-    else: # linear interpolation to find the exact radius where P=P_inner
-        x = np.argmin(np.abs(T_inner-T))
-        a,b = (x,x+1) if T_inner-T[x] > 0 else (x-1,x)
-        func = interp1d([log10(T[a]),log10(T[b])],[log10(r[a]),log10(r[b])],kind='linear')
-        RNS_calc = 10**func(log10(T_inner))
-
-        result = result[:b+1]
-        r = r[:b+1]
-        rho,T = result[:,0],result[:,1]
-
-        import matplotlib.pyplot as plt
-        # plt.figure()
-
-        # plt.plot(log10(r/1e5),log10(abs(T)),'k.-')
-        # plt.plot(log10([r[0]/1e5,r[-1]/1e5]),log10([T_inner,T_inner]),'k--')
-        # plt.plot(log10([r[a]/1e5,r[b]/1e5]),log10([T[a],T[b]]),'ro')
-        # plt.plot(log10([RNS_calc/1e5]),log10([T_inner]),'bo')
-        # plt.xlim([0.8,2.4])
-        # plt.ylim([6.5,9])
-
-        # plt.loglog(rho,T)
-        # plt.plot(log10(r/1e5),log10(rho),'k.-')
-        # plt.ylim([-1,1])
-
-        # plt.show()
-
-
-    if returnResult:
-        return result
-    else:
-        if flag:
-            return +100
-        else:
-            return (RNS_calc/1e5-RNS)/RNS       # Boundary error #2
-
-
+    return r,rho,T
 
 
 # ------------------------------------------------- Envelope ---------------------------------------------------
 
-def MakeEnvelope(f0, Rphot_km, mode='rootsolve', Verbose=0):
-
-    ''' Obtaining the wind solution for set of parameters Edot/LEdd and log10(Ts).
-        The modes are rootsolve : not output, just obtaining the boundary errors, 
-        and wind : obtain the full solutions.   '''
+def MakeEnvelope0(f0, Rphot_km, Verbose=0):   # just get envelope for provided f0 value
 
     global Rphot,Linf,verbose
     Rphot,verbose = Rphot_km*1e5 , Verbose
 
-    if mode == 'rootsolve':
-        
-        # Star by obtaining photospheric conditions
+    rho_phot,T_phot,Linf = photosphere(f0)
+    rspan = (Rphot , 1.01*rg)
+    r,rho,T = Shoot(rspan,rho_phot,T_phot)    
+    RNS_calc = r[-1]
+    error = (RNS_calc/1e5-RNS)/RNS
+    print(error)
+
+    # return error
+    return r,rho,T
+
+
+def MakeEnvelope(Rphot_km, Verbose=0):    # setup for relaxation method
+
+    global Rphot,Linf,verbose
+    Rphot,verbose = Rphot_km*1e5 , Verbose
+    
+    ## Sketch an initial solution 
+    # Span f-values in the interval [-3.7,-4].  Find the minimum value that gives a physical looking solution (Rbase>RNS)
+    # Extrapolate that solution to RNS+epsilon and attach a nearly-vertical line to T=Tb, rho=1e3, at RNS
+
+    rspan = (Rphot , 1.01*rg)
+    fvalues = linspace(-3.7,-4,100)
+    for i,f0 in enumerate(fvalues):
         rho_phot,T_phot,Linf = photosphere(f0)
-        # print(Linf/LEdd)
-        if verbose: 
-            print('Photospheric temperature : %.5f (log)'%log10(T_phot))
-            print('Photospheric density : %.5f (log)'%log10(rho_phot))
-
-        # Error is given by the outer luminosity
-        # r = np.linspace(Rphot, 3*rmin, 1000)
-        r = np.logspace(log10(Rphot), log10(5.1*rmin) , 1e4)
-        error = innerIntegration(r,rho_phot,T_phot)
-
-        return error 
-
-    elif mode == 'envelope':  # Same thing but calculate variables and output all of the arrays
-        
-        rho_phot,T_phot,Linf = photosphere(f0)
-        # print(Linf/LEdd)
-        if verbose: 
-            print('Photospheric temperature : %.5f (log)'%log10(T_phot))
-            print('Photospheric density : %.5f (log)'%log10(rho_phot))
-
-        r = np.logspace(log10(Rphot), log10(5.1*rmin) , 1e4)
-        result = innerIntegration(r,rho_phot,T_phot, returnResult=True)
-
-        rho,T = result[:,0],result[:,1]
-        r = r[:len(result)]
-
-        return r,rho,T
+        r,rho,T = Shoot(rspan,rho_phot,T_phot)    
+        if r[-1]<RNS*1e5:
+            ilast = i-1
+            break
+            
+    rho_phot,T_phot,Linf = photosphere(fvalues[ilast])
+    r,rho,T = Shoot(rspan,rho_phot,T_phot)  
 
 
+    ## Making inital solution
 
+    # m=20 point grid
+    zone1 = np.linspace(RNS*1e5 , RNS*1e5+200 , 15) # surface to 200m above
+    zone2 = np.linspace(RNS*1e5+250 , Rphot, 5)     # 250m above to photosphere
+    r0 = np.concatenate((zone1,zone2))
+
+    # Fit a line in log space, seperately in the inner and extended part
+    fT2 = np.poly1d(np.polyfit(log10(r[10::-1]),log10(T[10::-1]), deg=1))
+    fT1 = np.poly1d(np.polyfit(log10([zone1[0] , zone1[-1]]), [log10(T_inner) , fT2(log10(zone1[-1]))], deg=1))
+
+    frho2 = np.poly1d(np.polyfit(log10(r[10::-1]),log10(rho[10::-1]), deg=1))
+    frho1 = np.poly1d(np.polyfit(log10([zone1[0] , zone1[-1]]), [3 , frho2(log10(zone1[-1]))], deg=1))
+
+    T0   = 10**np.concatenate((fT1(log10(zone1))   , fT2(log10(zone2))))
+    rho0 = 10**np.concatenate((frho1(log10(zone1)) , frho2(log10(zone2))))
+
+    return r,rho,T,r0,T0,rho0
+
+
+r,rho,T,r0,T0,rho0=MakeEnvelope(20)
+
+import matplotlib.pyplot as plt
+fig,(ax1,ax2) = plt.subplots(1,2,figsize=(15,6))
+ax1.set_xlabel('log r')
+ax1.set_ylabel('log T')
+ax2.set_xlabel('log r')
+ax2.set_ylabel('log rho')
+ax1.plot(log10(r/1e5),log10(T),'k-')
+ax1.plot(log10(r0/1e5),log10(T0),'r.-')
+ax2.plot(log10(r/1e5),log10(rho),'k-')
+ax2.plot(log10(r0/1e5),log10(rho0),'r.-')
+
+plt.show()
+
+
+#########################################################################################################
+Rphot_km=20
+
+# import matplotlib.pyplot as plt
+
+# fig,(ax,ax2) = plt.subplots(1,2,figsize=(15,6))
+# ax.set_xlabel('log r')
+# ax.set_ylabel('log T')
+# ax2.set_xlabel('log r')
+# ax2.set_ylabel('log rho')
+# ax.set_ylim([7,9])
+# ax.axvline(6,linestyle='--')
+# ax2.axvline(6,linestyle='--')
+# plt.plot()
+# # plt.close()
+# fvals = linspace(-3.8399,-3.8401,500)
+# count=0
+# for i,f0 in enumerate(fvals):
+    
+#     r,rho,T = MakeEnvelope0(f0,Rphot_km)
+#     l1 = ax.plot(log10(r),log10(T),'k-',linewidth=1.5,label=('f=%.10f'%f0))
+#     l2 = ax.plot(log10(r),log10(T),'k-',linewidth=0.2)
+#     l3 = ax2.plot(log10(r),log10(rho),'k-',linewidth=1.5,label=('f=%.10f'%f0))
+#     l4 = ax2.plot(log10(r),log10(rho),'k-',linewidth=0.2)
+#     ax.legend()
+#     ax2.legend()
+#     plt.pause(0.01)
+#     fig.savefig('png/%06d.png'%i)
+#     l1.pop(0).remove()
+#     l3.pop(0).remove()
+
+#     if log10(r[-1])<6:
+#         count+=1
+#         if count==50:
+#             break
+
+# f0 = -3.84
+# r,rho,T = MakeEnvelope(f0,Rphot_km,Verbose=1)
+# fig,ax = plt.subplots(1,1)
+# ax.set_xlabel('log r')
+# ax.set_ylabel('log T')
+# ax.loglog(r,T,'b.-')
+# plt.show()
