@@ -7,7 +7,7 @@ import numpy as np
 from numpy import linspace, sqrt, log10, array, pi
 from IO import load_params
 import os
-from lsoda_remove import stdout_redirected
+from relax import Newton
 
 # --------------------------------------- Constants and parameters --------------------------------------------
 
@@ -188,7 +188,7 @@ def MakeEnvelope(Rphot_km, Verbose=0):    # setup for relaxation method
 
     # m=20 point grid
     zone1 = np.linspace(RNS*1e5 , RNS*1e5+200 , 15) # surface to 200m above
-    zone2 = np.linspace(RNS*1e5+250 , Rphot, 5)     # 250m above to photosphere
+    zone2 = np.linspace(RNS*1e5+1e3 , Rphot, 5)     # 1km above to photosphere
     r0 = np.concatenate((zone1,zone2))
 
     # Fit a line in log space, seperately in the inner and extended part
@@ -201,23 +201,47 @@ def MakeEnvelope(Rphot_km, Verbose=0):    # setup for relaxation method
     T0   = 10**np.concatenate((fT1(log10(zone1))   , fT2(log10(zone2))))
     rho0 = 10**np.concatenate((frho1(log10(zone1)) , frho2(log10(zone2))))
 
-    return r,rho,T,r0,T0,rho0
+    # To use approximate jacobian formula, have a second initial guess
+    T02,rho02 = 1.1*T0,1.1*rho0
+
+    Y,sols=Newton(X=r0, Yinit = [rho0,T0], derivs=derivs, BCs=[[1,10**8.5],[1,T_phot]], Jacobian='approximate', Yinit2=[rho02,T02], nmax=20)
+
+    return r,rho,T,r0,T0,rho0,Y,sols
 
 
-r,rho,T,r0,T0,rho0=MakeEnvelope(20)
+r,rho,T,r0,T0,rho0,Y,sols=MakeEnvelope(20)
 
-import matplotlib.pyplot as plt
-fig,(ax1,ax2) = plt.subplots(1,2,figsize=(15,6))
-ax1.set_xlabel('log r')
-ax1.set_ylabel('log T')
-ax2.set_xlabel('log r')
-ax2.set_ylabel('log rho')
-ax1.plot(log10(r/1e5),log10(T),'k-')
-ax1.plot(log10(r0/1e5),log10(T0),'r.-')
-ax2.plot(log10(r/1e5),log10(rho),'k-')
-ax2.plot(log10(r0/1e5),log10(rho0),'r.-')
+# import matplotlib.pyplot as plt
+# fig,(ax1,ax2) = plt.subplots(1,2,figsize=(15,6))
+# ax1.set_xlabel('log r')
+# ax1.set_ylabel('log T')
+# ax2.set_xlabel('log r')
+# ax2.set_ylabel('log rho')
+# ax1.plot(log10(r/1e5),log10(T),'k-')
+# ax1.plot(log10(r0/1e5),log10(T0),'r.-')
+# ax2.plot(log10(r/1e5),log10(rho),'k-')
+# ax2.plot(log10(r0/1e5),log10(rho0),'r.-')
 
-plt.show()
+
+def animate_sols():
+    fig,(ax1,ax2) = plt.subplots(1,2,figsize=(15,6))
+    ax1.set_xlabel('log r(km)')
+    ax1.set_ylabel('log rho')
+    ax2.set_xlabel('log r(km)')
+    ax2.set_ylabel('log T')
+    ax1.plot(log10(r0/1e5),log10(sols[0][0]),'k.-',lw=0.5,label='initial')
+    ax2.plot(log10(r0/1e5),log10(sols[1][0]),'k.-',lw=0.5,label='initial')
+    ax1.legend()
+    ax2.legend()
+    for i in range(1,len(sols[0])):
+        l1=ax1.plot(log10(r0/1e5),log10(sols[0][i]),'b-')
+        l2=ax2.plot(log10(r0/1e5),log10(sols[1][i]),'b-')
+        plt.pause(0.1)
+        if i<len(sols[0])-1:
+            l1.pop(0).remove()
+            l2.pop(0).remove()
+
+
 
 
 #########################################################################################################

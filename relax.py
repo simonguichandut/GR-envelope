@@ -21,7 +21,7 @@ def Newton(X, Yinit, derivs, BCs,      Jacobian='analytical', derivs2=None, Yini
     ''' Arguments
     X : grid (list or numpy array)
     Yinit : list of two initial arrays [y1,y2]
-    derivs : function which returns [g1,g2] - must have input arguments (x,y1(x),y2(x))
+    derivs : function which returns [g1,g2] - must have input arguments (x,Y(x))
     BCs : A list of the couples [which function (1 or 2) , boundary value]. For example in top description [[2,alpha] , [1,Beta]]
     Jacobian : analytical (requires derivs2) or approximate (requires yinit2) 
     derivs2 : second derivative functions
@@ -44,21 +44,34 @@ def Newton(X, Yinit, derivs, BCs,      Jacobian='analytical', derivs2=None, Yini
 
 
     ya = stack_y(Yinit[0] , Yinit[1])
-    sols = [ya]  # keep track of what happens to our solution over time
+    sols = [[Yinit[0]],[Yinit[1]]]  # keep track of what happens to our solution over time
 
     if Jacobian == 'approximate':
         yb = stack_y(Yinit2[0] , Yinit2[1])
-        sols.append(yb)
+        sols[0].append(Yinit2[0])
+        sols[1].append(Yinit2[1])
 
     n, go = 0, 1
     while go:
 
         print(n)
         J = Jac_approx(Err, ya, yb, derivs, BCs)
-        ynew = yb - np.matmul(np.linalg.inv(J), Err(yb, derivs, BCs))
+        
+        pillow = 1
+        ynew = yb - pillow*np.matmul(np.linalg.inv(J), Err(yb, derivs, BCs))
+        
+        while True in (ynew<0):
+            pillow/=3
+            print('pillow update : ',pillow)
+            ynew = yb - pillow*np.matmul(np.linalg.inv(J), Err(yb, derivs, BCs))
 
         ya = yb[:]
         yb = ynew[:]
+        
+        Y = unstack_y(yb)
+        sols[0].append(Y[0])
+        sols[1].append(Y[1])
+        
 
         err = np.linalg.norm(yb-ya)
 #         print(err)
@@ -67,12 +80,12 @@ def Newton(X, Yinit, derivs, BCs,      Jacobian='analytical', derivs2=None, Yini
             print('Converged after %d iterations\n' % n)
 
         n += 1
-        if n == nmax:
+        if n == nmax+1:
             print('Maximum number of iterations (%d) reached\n'%nmax)
             go = 0
 
                 
-    return yb,sols
+    return Y,sols
 
 
 
@@ -111,10 +124,9 @@ def Err(y,derivs,BCs):  # error vector. Expecting y to be the m-stacked y1,y2
     ## Boundary conditions
     fbc1,fbc2 =  BCs[0][0] , BCs[1][0]
     alpha,beta = BCs[0][1] , BCs[1][1]
-    F0, Fend = y1[0]-alpha, y1[-1]-beta
-    
+   
     F0   = y1[0]-alpha  if fbc1==0 else y2[0]-alpha
-    Fend = y1[-1]-alpha if fbc2==0 else y2[-1]-alpha
+    Fend = y1[-1]-beta if fbc2==0 else y2[-1]-beta
 
     F = [F0]  # first element is BC1
 
@@ -122,8 +134,8 @@ def Err(y,derivs,BCs):  # error vector. Expecting y to be the m-stacked y1,y2
     for k in range(1, m):
 
         yk, ykm1 = get_yk(y, k), get_yk(y, k-1)
-        Gk   = derivs(x[k],    *yk)      # star to unpack output of get_yk, which is a tuple
-        Gkm1 = derivs(x[k-1], *ykm1)
+        Gk   = derivs(x[k],    yk)      
+        Gkm1 = derivs(x[k-1], ykm1)
 
         for i in range(2):
             Fk = (yk[i] - ykm1[i])/(x[k]-x[k-1]) - 0.5*(Gk[i] + Gkm1[i])   # trapezoidal derivative
