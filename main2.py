@@ -133,12 +133,11 @@ def Shoot(rspan, rhophot, Tphot, returnResult=False):
 
     inic = [rhophot, Tphot]
 
-    def hit_innerTemp(t, y): return y[1]-T_inner
+    def hit_innerTemp(r, Y): return Y[1]-T_inner
     hit_innerTemp.terminal = True # stop integrating at this point 
 
     sol = solve_ivp(derivs, rspan, inic, method='Radau',events = hit_innerTemp)
 
-    r = sol.t
     r,rho,T = sol.t , sol.y[0] , sol.y[1]
 
     return r,rho,T
@@ -187,8 +186,8 @@ def MakeEnvelope(Rphot_km, Verbose=0):    # setup for relaxation method
     ## Making inital solution
 
     # m=20 point grid
-    zone1 = np.linspace(RNS*1e5 , RNS*1e5+200 , 15) # surface to 200m above
-    zone2 = np.linspace(RNS*1e5+1e3 , Rphot, 5)     # 1km above to photosphere
+    zone1 = np.linspace(RNS*1e5 , (RNS+1)*1e5 , 15) # surface to 500m above
+    zone2 = np.linspace((RNS+2)*1e5 , Rphot, 5)     # 1km above to photosphere
     r0 = np.concatenate((zone1,zone2))
 
     # Fit a line in log space, seperately in the inner and extended part
@@ -211,24 +210,28 @@ def MakeEnvelope(Rphot_km, Verbose=0):    # setup for relaxation method
 
 r,rho,T,r0,T0,rho0,Y,sols=MakeEnvelope(20)
 
-# import matplotlib.pyplot as plt
+import matplotlib.pyplot as plt
+# plt.style.use('presentation')
+
 # fig,(ax1,ax2) = plt.subplots(1,2,figsize=(15,6))
-# ax1.set_xlabel('log r')
-# ax1.set_ylabel('log T')
-# ax2.set_xlabel('log r')
-# ax2.set_ylabel('log rho')
+# ax1.set_xlabel('log r(km)', fontsize=14)
+# ax1.set_ylabel('log T', fontsize=14)
+# ax2.set_xlabel('log r(km)', fontsize=14)
+# ax2.set_ylabel('log rho', fontsize=14)
 # ax1.plot(log10(r/1e5),log10(T),'k-')
 # ax1.plot(log10(r0/1e5),log10(T0),'r.-')
 # ax2.plot(log10(r/1e5),log10(rho),'k-')
 # ax2.plot(log10(r0/1e5),log10(rho0),'r.-')
+# fig.savefig('inital_solutions.png')
+# plt.show()
 
 
 def animate_sols():
     fig,(ax1,ax2) = plt.subplots(1,2,figsize=(15,6))
-    ax1.set_xlabel('log r(km)')
-    ax1.set_ylabel('log rho')
-    ax2.set_xlabel('log r(km)')
-    ax2.set_ylabel('log T')
+    ax1.set_xlabel('log r(km)', fontsize=14)
+    ax1.set_ylabel('log rho', fontsize=14)
+    ax2.set_xlabel('log r(km)', fontsize=14)
+    ax2.set_ylabel('log T', fontsize=14)
     ax1.plot(log10(r0/1e5),log10(sols[0][0]),'k.-',lw=0.5,label='initial')
     ax2.plot(log10(r0/1e5),log10(sols[1][0]),'k.-',lw=0.5,label='initial')
     ax1.legend()
@@ -236,12 +239,13 @@ def animate_sols():
     for i in range(1,len(sols[0])):
         l1=ax1.plot(log10(r0/1e5),log10(sols[0][i]),'b-')
         l2=ax2.plot(log10(r0/1e5),log10(sols[1][i]),'b-')
-        plt.pause(0.1)
+        plt.pause(0.01)
+        fig.savefig('png2/%06d.png'%i)
         if i<len(sols[0])-1:
             l1.pop(0).remove()
             l2.pop(0).remove()
 
-
+animate_sols()
 
 
 #########################################################################################################
