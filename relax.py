@@ -3,7 +3,7 @@ Relaxation method for a two-point boundary problem with two functions
 * Form dY/dx = G(x,Y),  A<x<B
 * Y = (y1,y2) dependent variables
 * G = (g1,g2) functions of x,y1,y2
-* x is continuous  and discretizable (non-regular grid spacing is fine)
+* x is continuous  and discretizable (non-regular grid spacing is ok)
 * BCs : one at each boundary for one of the two functions, e.g f2(A)=alpha , f1(B)=beta
 
 * Needs one (reasonable) trial solution of the derivatives of G can be expressed analytically, and two trial solutions
@@ -14,7 +14,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 import sys
 from numpy import array, linspace, ones
-
+from pandas import DataFrame
 
 def Newton(X, Yinit, derivs, BCs,      Jacobian='analytical', derivs2=None, Yinit2=None  ,epsilon=1e-10, nmax=100):
 
@@ -54,16 +54,25 @@ def Newton(X, Yinit, derivs, BCs,      Jacobian='analytical', derivs2=None, Yini
     n, go = 0, 1
     while go:
 
-        print(n)
+        print('\n%d \n'%n)
         J = Jac_approx(Err, ya, yb, derivs, BCs)
+#        print(DataFrame(J))
         
         pillow = 1
         ynew = yb - pillow*np.matmul(np.linalg.inv(J), Err(yb, derivs, BCs))
-        
-        while True in (ynew<0):
-            pillow/=3
-            print('pillow update : ',pillow)
-            ynew = yb - pillow*np.matmul(np.linalg.inv(J), Err(yb, derivs, BCs))
+    
+
+        #### Assesment of solution space
+
+        ### For stricly positive solutions
+#        while True in (ynew<0):
+#             pillow/=3
+#             print('pillow update : ',pillow)
+#             ynew = yb - pillow*np.matmul(np.linalg.inv(J), Err(yb, derivs, BCs))
+#    
+#             if pillow<1e-30:
+#                 sys.exit('exiting')
+    
 
         ya = yb[:]
         yb = ynew[:]
@@ -73,8 +82,11 @@ def Newton(X, Yinit, derivs, BCs,      Jacobian='analytical', derivs2=None, Yini
         sols[1].append(Y[1])
         
 
-        err = np.linalg.norm(yb-ya)
-#         print(err)
+        E = Err(yb,derivs,BCs)
+        err = np.linalg.norm(E)
+#        print('Update : ',ynew)
+#        print('Error : ',E)
+        print('Error norm : %.3e'%err)
         if err < 1e-10:
             go = 0
             print('Converged after %d iterations\n' % n)
@@ -112,11 +124,7 @@ def get_yk(y, k):     # gives Y_k = (y1_k,y2_k), which is the input needed for G
 
 
 
-# Writing problem as F=0
-
-# def G(xk, y):  # RHS of dY/dx=G(x).  Expecting y to be [y1(x),y2(x)]
-#     return [y[1], 1+2*xk]
-
+## Writing problem as F=0
 
 def Err(y,derivs,BCs):  # error vector. Expecting y to be the m-stacked y1,y2
     y1, y2 = unstack_y(y)
@@ -151,9 +159,18 @@ def Err(y,derivs,BCs):  # error vector. Expecting y to be the m-stacked y1,y2
 def Jac_approx(func, ya, yb, *args):  # jacobian from finite difference derivatives (needs two points)
 
     def Jmunu(mu, nu):  # returns approximate of dF_mu/dy_nu
-        num = func([ya[i] if i != nu else yb[i]
+        
+#        if ya[nu]==yb[nu]: # arrived at a solution for x[nu]
+        eps = 1e-5
+        num = func([ya[i] if i != nu else ya[i]+eps
                     for i in range(2*m)],*args)[mu] - func(ya,*args)[mu]
-        den = yb[nu]-ya[nu]
+        den = eps
+            
+#        else:
+#            num = func([ya[i] if i != nu else yb[i]
+#                        for i in range(2*m)],*args)[mu] - func(ya,*args)[mu]
+#            den = yb[nu]-ya[nu]
+            
         return num/den
 
     J = np.zeros((2*m, 2*m))  # initialize matrix
@@ -166,3 +183,4 @@ def Jac_approx(func, ya, yb, *args):  # jacobian from finite difference derivati
 
 def Jac_exact(y):  # exact jacobian (problem specificc)
     pass
+
