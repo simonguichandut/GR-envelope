@@ -14,164 +14,92 @@ def load_params():
         comp = f.readline().split()[1]
         next(f)
         next(f)
-        mode = f.readline().split()[1]
         save = f.readline().split()[1]
         img = f.readline().split()[1]
         
-    return M,R,y_inner,comp,mode,save,img
+    return M,R,y_inner,comp,save,img
 
 
-# def get_name():  # We give various files and directories the same name corresponding to the setup given in the parameter file
+def get_name():  # We give various files and directories the same name corresponding to the setup given in the parameter file
 
-#     M,R,y_inner,tau_out,comp,_,_,_ = load_params()
-#     name = '_'.join( [ comp , str(M) , ('%2d'%R) , ('%1d'%tau_out) , ('%1d'%log10(y_inner)) ] )
-#     return name
-
-
-# def save_root(logMDOT,root):
-
-#     filename = get_name()
-#     path = 'wind_solutions/sols_' + filename + '.txt'
-
-#     if not os.path.exists(path):
-#         f = open(path,'w+')
-#         f.write('{:<7s} \t {:<11s} \t {:<11s}\n'.format(
-#             'logMdot' , 'Edot/LEdd' , 'log10(Ts)'))
-#     else:
-#         f = open(path,'a')
-
-#     f.write('{:<7.2f} \t {:<10f} \t {:<10f}\n'.format(
-#             logMDOT,root[0],root[1]))
+    M,R,y_inner,comp,_,_ = load_params()
+    name = '_'.join( [ comp , str(M) , ('%2d'%R) , ('%1d'%log10(y_inner)) ] )
+    return name
 
 
-# def load_roots():
+def make_directories():
 
-#     filename = get_name()
-#     path = 'wind_solutions/sols_' + filename + '.txt'
-
-#     if not os.path.exists(path):
-#         print('Root file does not exist')
-
-#     else:
-#         logMDOTS,roots = [],[]
-#         with open(path, 'r') as f:
-#             next(f)
-#             for line in f:
-#                 stuff = line.split()
-#                 logMDOTS.append(float(stuff[0]))
-#                 roots.append([float(stuff[1]), float(stuff[2])])
-
-#         return logMDOTS,roots
+    dirname = get_name()
+    path = 'results/' + dirname
+    if not os.path.exists(path):   # Assuming code is being run from main directory
+        os.mkdir(path)
+        os.mkdir(path+'/data')
+        os.mkdir(path+'/plots')
 
 
 
-# def make_directories():
+def write_to_file(Rphotkm,data):
 
-#     dirname = get_name()
-#     path = 'results/' + dirname
-#     if not os.path.exists(path):   # Assuming code is being run from main directory
-#         os.mkdir(path)
-#         os.mkdir(path+'/data')
-#         os.mkdir(path+'/plots')
+    # data is expected to be list of the following arrays : R, Rho, T, P, Linf (Linf is just a number)
 
+    dirname = get_name()
+    path = 'results/' + dirname + '/data/'
+    filename = path + str(Rphotkm) + '.txt'
 
+    with open(filename,'w') as f:
+        R, Rho, T, P, Linf = data
 
-# def write_to_file(logMdot,data):
+        f.write('{:<13s} \t {:<11s} \t {:<11s} \t {:<11s} \t\t Linf = {:<6e}\n'.format(
+            'r (km)','rho (g/cm3)','T (K)','P (dyne/cm2)',Linf))
 
-#     # data is expected to be list of the following arrays : R, T, Rho, u, Phi, Lstar, L, E, P, cs, tau, rs (rs is just a number)
+        for i in range(len(R)):
+            f.write('%0.8e \t %0.6e \t %0.6e \t %0.6e\n'%
+                (R[i]/1e5 , Rho[i] , T[i] , P[i]))
 
-#     dirname = get_name()
-#     path = 'results/' + dirname + '/data/'
-#     filename = path + str(logMdot) + '.txt'
-
-#     with open(filename,'w') as f:
-#         f.write('{:<13s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s}\n'.format(
-#             'r (km)','u (km/s)','cs (km/s)','rho (g/cm3)','T (K)','P (dyne/cm2)','phi','L (erg/s)','L* (erg/s)','E (erg)','tau'))
-
-#         R, T, Rho, u, Phi, Lstar, L, E, P, cs, tau, rs = data
-#         for i in range(len(R)):
-#             f.write('%0.8e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e'%
-#                 (R[i]/1e5 , u[i]/1e5 , cs[i]/1e5 , Rho[i] , T[i] , P[i] , Phi[i] , L[i] , Lstar[i] , E[i], tau[i]))
-
-#             if R[i]!=rs:
-#                 f.write('\n')
-#             else:
-#                 f.write('\t sonic point\n')
                 
 
 
-# def read_from_file(logMdot):
+def read_from_file(Rphotkm):
 
-#     # output is arrays : R, u, cs, rho, T, P, phi, L, Lstar, E and sonic point rs
+    # output is arrays : R, rho, T, P, L and Linf
 
-#     dirname = get_name()
-#     path = 'results/' + dirname + '/data/'
-#     filename = path + str(logMdot) + '.txt'
+    dirname = get_name()
+    path = 'results/' + dirname + '/data/'
+    filename = path + str(Rphotkm) + '.txt'
 
-#     def append_vars(line,varz,cols): # take line of file and append its values to variable lists 
-#         l=line.split()
-#         for var,col in zip(varz,cols):
-#             var.append(float(l[col]))
+    def append_vars(line,varz,cols): # take line of file and append its values to variable lists 
+        l=line.split()
+        for var,col in zip(varz,cols):
+            var.append(float(l[col]))
 
-#     R, u, cs, rho, T, P, phi, L, Lstar, E, tau = [[] for i in range (11)]
-#     with open(filename,'r') as f:
-#         next(f)
-#         for line in f: 
-#             append_vars(line,[R, u, cs, rho, T, P, phi, L, Lstar, E, tau],[i for i in range(11)])
-#             if line.split()[-1]=='point': rs = float(line.split()[0])*1e5
+    R, rho, T, P = [[] for i in range (4)]
+    with open(filename,'r') as f:
+        for i,line in enumerate(f): 
+            if i==0: Linf = float(line.split()[-1])
+            append_vars(line,[R, rho, T, P],[i for i in range(4)])
 
-#     return array(R),array(u),array(cs),array(rho),array(T),array(P),array(phi),array(L),array(Lstar),array(E),array(tau),rs
-
-
-# def save_plots(figs,fignames,img):
-
-#     dirname = get_name()
-#     path = 'results/' + dirname + '/plots/'
-
-#     for fig,figname in zip(figs,fignames):
-#         fig.savefig(path+figname+img)
+    return array(R),array(rho),array(T),array(P),Linf
 
 
+def save_plots(figs,fignames,img):
 
-# def clean_rootfile():
+    dirname = get_name()
+    path = 'results/' + dirname + '/plots/'
 
-#     # Find duplicates, and remove all but the latest root (assuming the last one is the correct one)
-#     # Sort from lowest to biggest
-#     from numpy import unique,sort,argwhere
+    for fig,figname in zip(figs,fignames):
+        fig.savefig(path+figname+img)
 
-#     logMDOTS,roots = load_roots()
-#     new_logMDOTS = sort(unique(logMDOTS))
 
-#     if list(new_logMDOTS) != list(logMDOTS):
 
-#         v = []
-#         for x in new_logMDOTS:
-#             duplicates= argwhere(logMDOTS==x)
-#             v.append(duplicates[-1][0]) # keeping the last one
-
-#         new_roots = []
-#         for i in v:
-#             new_roots.append(roots[i])
-            
-#         o = input('Roots file will be overwritten. Proceed? (0 or 1) ')
-#         if o:
-#             filename = get_name()
-#             path = 'wind_solutions/sols_' + filename + '.txt'
-#             os.remove(path)
-
-#             for x,y in zip(new_logMDOTS,new_roots): 
-#                 save_root(x,y)
-            
-
-# def pickle_save(name):
+def pickle_save(name):
     
-#     # Save all arrays into pickle file
+    # Save all arrays into pickle file
 
-#     # Import Winds
-#     clean_rootfile()
-#     logMDOTS,roots = load_roots()
+    # Import Winds
+    clean_rootfile()
+    logMDOTS,roots = load_roots()
 
-#     if not os.path.exists('pickle/'):
-#         os.mkdir('pickle/')
+    if not os.path.exists('pickle/'):
+        os.mkdir('pickle/')
 
     
