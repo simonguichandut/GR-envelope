@@ -4,26 +4,4 @@
 
 /png
 
-out.mp4
-
-relax1D.ipynb
-
-.ipynb_checkpoints/
-
-initial_solutions.png
-
-movie2.mp4
-
-png2/
-
-png_old/
-
-pngtest/
-
-test_relax.py
-
-main.py
-
-main2.py
-
-test.mp4
+analysis.py

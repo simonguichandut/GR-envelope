@@ -1,13 +1,12 @@
 ---- NS ----
 M	1.4		[Msun]
-R	10		[km]
+R	12		[km]
 
 --- Envelope ---
 y_inner 1e8		[g/cm2]	
 comp	He		[He or ..]
 
 --- Code ---
-mode	rootsolve	[rootsolve or wind]
 save	1		
 img	.png		[.png,.pdf,.jpg]	 
 
