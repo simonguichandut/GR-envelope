@@ -102,6 +102,27 @@ def save_plots(figs,fignames,img):
         fig.savefig(path+figname+img)
 
 
+def export_values(target='./'):
+
+    # Export useful values for analysis for each Rphot to a text file at target directory
+    # Current values are : Linf,Rb,Tb,Rhob,Pb,Tphot,Rhophot
+
+    if target[-1]!='/': target += '/'
+    Rphotkms = get_phot_list()
+
+    with open(target+'envelope_values.txt','w') as f:
+
+        f.write('{:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \n'.format(
+            'Rph (km)','Linf (erg/s)','rb (cm)','Tb (K)','rhob (g/cm3)','Pb (dyne/cm2)','Tph (K)','rhoph (g/cm3)'))
+
+        for R in Rphotkms:
+            r, rho, T, P, Linf = read_from_file(R)
+            f.write('%d \t\t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \n'%
+                (R,Linf,r[0]*1e5,T[0],rho[0],P[0],T[-1],rho[-1]))
+
+
+# export_values('../../compare')
+
 
 # def pickle_save(name):
     
