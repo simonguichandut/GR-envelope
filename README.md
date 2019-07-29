@@ -29,3 +29,7 @@ Pre-solved roots are available in the `envelope_solutions` subfolder, organized 
 
 
 ## Example plots
+
+![](/results/He_1.4_12_8/plots/Temperature.pdf)
+![](/results/He_1.4_12_8/plots/Density-Temperature.pdf)
+

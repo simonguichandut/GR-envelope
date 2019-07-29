@@ -1,7 +1,7 @@
 ''' Input and Output '''
 
 import os
-from numpy import log10,array
+from numpy import log10,array,sort
 
 def load_params():
     with open('params.txt','r') as f:
@@ -37,7 +37,6 @@ def make_directories():
         os.mkdir(path+'/plots')
 
 
-
 def write_to_file(Rphotkm,data):
 
     # data is expected to be list of the following arrays : R, Rho, T, P, Linf (Linf is just a number)
@@ -55,13 +54,11 @@ def write_to_file(Rphotkm,data):
         for i in range(len(R)):
             f.write('%0.8e \t %0.6e \t %0.6e \t %0.6e\n'%
                 (R[i]/1e5 , Rho[i] , T[i] , P[i]))
-
-                
-
+    
 
 def read_from_file(Rphotkm):
 
-    # output is arrays : R, rho, T, P, L and Linf
+    # output is arrays : R, rho, T, P and Linf
 
     dirname = get_name()
     path = 'results/' + dirname + '/data/'
@@ -75,10 +72,25 @@ def read_from_file(Rphotkm):
     R, rho, T, P = [[] for i in range (4)]
     with open(filename,'r') as f:
         for i,line in enumerate(f): 
-            if i==0: Linf = float(line.split()[-1])
-            append_vars(line,[R, rho, T, P],[i for i in range(4)])
+            if i==0: 
+                Linf = float(line.split()[-1])
+            else:
+                append_vars(line,[R, rho, T, P],[i for i in range(4)])
 
     return array(R),array(rho),array(T),array(P),Linf
+
+
+def get_phot_list():
+
+    # Returns list of photospheric radius that have solutions
+    path = 'results/' + get_name() + '/data/'
+
+    Rphotkms = []
+    for filename in os.listdir(path):
+        if filename.endswith('.txt'):
+            Rphotkms.append(eval(filename[:-4]))
+
+    return sort(Rphotkms)
 
 
 def save_plots(figs,fignames,img):
@@ -91,15 +103,15 @@ def save_plots(figs,fignames,img):
 
 
 
-def pickle_save(name):
+# def pickle_save(name):
     
-    # Save all arrays into pickle file
+#     # Save all arrays into pickle file
 
-    # Import Winds
-    clean_rootfile()
-    logMDOTS,roots = load_roots()
+#     # Import Winds
+#     clean_rootfile()
+#     logMDOTS,roots = load_roots()
 
-    if not os.path.exists('pickle/'):
-        os.mkdir('pickle/')
+#     if not os.path.exists('pickle/'):
+#         os.mkdir('pickle/')
 
     
