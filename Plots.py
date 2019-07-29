@@ -75,8 +75,10 @@ for i,R in enumerate(Rphotkms):
         ax4.loglog(r,P,label=('%d km'%R))
 
 
-for ax in (ax1,ax2,ax3,ax4):
+for fig,ax in zip((fig1,fig2,fig3,fig4),(ax1,ax2,ax3,ax4)):
         ax.legend(title=r'R$_\text{ph}$ (km)', loc='best')
+        fig.tight_layout()
+
 
 
 if save: 
