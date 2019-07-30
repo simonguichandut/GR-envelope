@@ -36,7 +36,7 @@ if len(sys.argv)>1:
             
     i = sys.argv[1]
     
-    if len(i)>3 and ',' not in i:
+    if len(i)>4 and ',' not in i:
         sys.exit('Give Rphots separated by commas and no spaces')
 
     if i=='all':
