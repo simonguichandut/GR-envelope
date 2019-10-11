@@ -1,7 +1,7 @@
 ''' Input and Output '''
 
 import os
-from numpy import log10,array,sort
+from numpy import log10,array,sort,sqrt
 
 def load_params():
     with open('params.txt','r') as f:
@@ -106,19 +106,40 @@ def export_values(target='./'):
 
     # Export useful values for analysis for each Rphot to a text file at target directory
     # Current values are : Linf,Rb,Tb,Rhob,Pb,Tphot,Rhophot
+    # tsound(sound crossing time) 
 
     if target[-1]!='/': target += '/'
     Rphotkms = get_phot_list()
 
+    from scipy.interpolate import interp1d
+    from scipy.integrate import quad
+
+    # Parameters
+    M, RNS, y_inner, comp, save, img = load_params()
+
+    if comp == 'He':
+        Z=2
+        mu_I, mu_e, mu = 4, 2, 4/3
+
+    kB,mp = 1.380658e-16, 1.67e-24
+    def cs2(T):  # ideal gas sound speed  c_s^2  
+        return kB*T/(mu*mp)
+    
     with open(target+'envelope_values.txt','w') as f:
 
-        f.write('{:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \n'.format(
-            'Rph (km)','Linf (erg/s)','rb (cm)','Tb (K)','rhob (g/cm3)','Pb (dyne/cm2)','Tph (K)','rhoph (g/cm3)'))
+        f.write('{:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \n'.format(
+            'Rph (km)','Linf (erg/s)','rb (cm)','Tb (K)','rhob (g/cm3)','Pb (dyne/cm2)','Tph (K)','rhoph (g/cm3)','tsound (s)'))
 
         for R in Rphotkms:
             r, rho, T, P, Linf = read_from_file(R)
-            f.write('%d \t\t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \n'%
-                (R,Linf,r[0]*1e5,T[0],rho[0],P[0],T[-1],rho[-1]))
+            
+            cs = sqrt(cs2(T))/1e5  # r is in km
+            func_inverse_cs = interp1d(r,1/cs,kind='cubic')
+            tsound,err = quad(func_inverse_cs,r[0],r[-1],epsrel=1e-5)#limit=100)
+            print(tsound,err)
+    
+            f.write('%d \t\t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e\n'%
+                (R,Linf,r[0]*1e5,T[0],rho[0],P[0],T[-1],rho[-1],tsound))
 
 
 # export_values('../../compare')

@@ -1,5 +1,6 @@
 ''' Main code to calculate expanded envelopes '''
 
+import sys
 from scipy.optimize import brentq
 from scipy.integrate import solve_ivp
 from scipy.interpolate import interp1d
@@ -45,6 +46,9 @@ def kappa(rho,T):
 #     return kappa0/(1.0+(T/4.5e8)**0.86)     
     if rho<0:rho=abs(rho)  
     return kappa0/(1.0+(T/4.5e8)**0.86) + 1e23*Z**2/(mu_e*mu_I)*rho*T**(-7/2)
+
+def cs2(T):  # ideal gas sound speed  c_s^2  
+   return kB*T/(mu*mp)
 
 def cs2_I(T):  # ideal gas sound speed c_s^2 IONS ONLY
     return kB*T/(mu_I*mp)
@@ -136,7 +140,8 @@ def photosphere(Rphot,f0):
         npoints += 10
 
     T = brentq(Teff_eq, Tkeep1, Tkeep2, xtol=1e-10, maxiter=10000)
-    rho = 2/3 * mu*mp/(kB*T) * grav(Rphot)/kappa(0.,T) * 10**f0
+    rho = 2/3 * mu*mp/(kB*T) * grav(Rphot)/kappa(0.,T) * 10**f0          # paczynski and anderson  (assuming zero density for the opacity)
+    # rho = 3 * mu*mp/(kB*T) * grav(Rphot)/kappa(0.,T) * 10**f0           # if tau photosphere = 3
     Linf = 4*pi*Rphot**2*sigmarad*T**4* (Swz(Rphot)**(-2))
 
     return rho,T,Linf
@@ -195,7 +200,6 @@ def Error(r): # Evaluate normalized error on location of the surface
 
 # ------------------------------------------------- Envelope ---------------------------------------------------
 
-
 def MakeEnvelope(Rphot_km, p=0):    # setup for relaxation method
 
     global Linf
@@ -205,12 +209,12 @@ def MakeEnvelope(Rphot_km, p=0):    # setup for relaxation method
     Rad,Rho,Temp = [array([]) for i in range(3)]
     
     # First pass to find border values of f
-    fvalues = linspace(-3.7,-4,100)
+    fvalues = linspace(-3.7,-4.5,100)
     for i,f0 in enumerate(fvalues):
         rho_phot,T_phot,Linf = photosphere(Rphot,f0)
         solb = Shoot(rspan,rho_phot,T_phot) 
-#        print('f=',f0,'success: ',solb.success)
         Eb = Error(solb.t)
+        # print('f=',f0,'\t success: ',solb.success,'\t error:',Eb)
         if Eb<0:
             a,b = fvalues[i],fvalues[i-1]
             Ea,sola = Eb,solb
@@ -218,11 +222,10 @@ def MakeEnvelope(Rphot_km, p=0):    # setup for relaxation method
             break
         Eprev,solprev = Eb,solb
         
-#    r_grid = np.linspace((RNS*1e5)
-    def check_convergence(sola,solb,rcheck_prev,tol=1e-3):  
+    def check_convergence(sola,solb,rcheck_prev,tol=1e-4):  
         ''' checks if two solutions have similar parameters rho,T (1 part in 1e4), some small integration distance in 
             if is converged, returns the interpolated value of rho,T at that point                            '''
-        d = Rphot/100/(count+1) # 100 meter at a time, reduce by count number of current iteration
+        d = Rphot/100/(count+1) # 1% of photosphere at a time, reduce by count number of current iteration
         rcheck = rcheck_prev - d
         rhoa,Ta = sola.sol(rcheck)
         rhob,Tb = solb.sol(rcheck)
@@ -233,20 +236,22 @@ def MakeEnvelope(Rphot_km, p=0):    # setup for relaxation method
             return False,
         
     if p!=0: fig = bisection_dynamic_plot_setup(p)
-    print('Radius (km) \t Iteration # \t Iteration counter')    
+    print('Radius (km) \t Step # \t Iteration counter')    
     
     
     # Begin bissection 
     Em=100
     count_iter,count = 0,0
-    while abs(Em)>1e-5:
+    while abs(Em)>1e-4:   # we can stop when the final radius is the neutron star radius close to one part in 10^4
         
+        # for dynamic plotting of the process
         if p!=0:
 #            R=linspace(*rspan,5000)
             l1,=plt.semilogy(sola.t/1e5,abs(sola.y[p-1]),'r-')
             l2,=plt.semilogy(solb.t/1e5,solb.y[p-1],'b-')
             mypause(0.001)
         
+        # middle point.  In the first integration, a&b are the f values.  In the rest, a&b are between 0 and 1. For interpolation
         m = (a+b)/2
     
         if count_iter == 0:  # in the first iteration, a&b represent f
@@ -279,21 +284,30 @@ def MakeEnvelope(Rphot_km, p=0):    # setup for relaxation method
             if p!=0:
                 po = rhoa if p==1 else Ta
                 plt.semilogy([rcheck/1e5],[po],'k.')
-                fig.savefig('png/%06d.png'%count_iter)
+                # fig.savefig('png/%06d.png'%count_iter)
             
 
-        print('%.5f \t %d \t\t %d'%(rcheck/1e5,count_iter+1,count+1))
+        print('%.5f \t %d \t\t %d'%(rcheck/1e5,count_iter,count+1))
         count+=1
 
-        if count==50:
-            break
+        nitermax=200
+        if count==nitermax:
+            sys.exit("Could not arrive at the neutron star radius! Exiting after being stuck at the same step for %d iterations"%nitermax)
         if p!=0 and abs(Em)>1e-5:
             l1.set_alpha(0.2)
             l2.set_alpha(0.2)
             l1.set_linewidth(0.5)
             l2.set_linewidth(0.5)
 
+    # Reached precision criteria for error on radius
     print('Reached surface!')
+    if p!=0:
+        print(solm.t[-1],Em)
+        l1,=plt.semilogy(solm.t/1e5,abs(solm.y[p-1]),'k-')
+        # fig.savefig('png/%06d.png'%count_iter)
+
+
+
     # Fill out arrays    
     Rad,Rho,Temp  = np.insert(Rad,0,Rphot), np.insert(Rho,0,rho_phot), np.insert(Temp,0,T_phot)
     ind = solm.t<Rad[-1]
