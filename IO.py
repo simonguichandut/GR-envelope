@@ -53,12 +53,12 @@ def write_to_file(Rphotkm,data):
 
         for i in range(len(R)):
             f.write('%0.8e \t %0.6e \t %0.6e \t %0.6e\n'%
-                (R[i]/1e5 , Rho[i] , T[i] , P[i]))
+                (R[i]/1e5 , Rho[i] , T[i] , P[i]))    # R is in km!!
     
 
 def read_from_file(Rphotkm):
 
-    # output is arrays : R, rho, T, P and Linf
+    # output is arrays : R, rho, T, P and Linf           # R is in km!!!
 
     dirname = get_name()
     path = 'results/' + dirname + '/data/'
@@ -77,7 +77,7 @@ def read_from_file(Rphotkm):
             else:
                 append_vars(line,[R, rho, T, P],[i for i in range(4)])
 
-    return array(R),array(rho),array(T),array(P),Linf
+    return array(R),array(rho),array(T),array(P),Linf   # R,rho,T,P,Linf for copy-pasting
 
 
 def get_phot_list():

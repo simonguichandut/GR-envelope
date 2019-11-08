@@ -1,5 +1,5 @@
 import sys
-from env_GR import MakeEnvelope,pressure
+from env_GR import MakeEnvelope,MakeEnvelope_plot,pressure
 from IO import load_params
 M, RNS, y_inner, comp, save, img = load_params()
 
@@ -8,14 +8,18 @@ def driver_envelope(Rphotkm,p=0):
     from IO import write_to_file
 
     if Rphotkm == 'all': # a preset list of photospheric radii
-        Rphotkm = (13,15,20,30,40,50,70,100,150,200)
+        Rphotkm = (13,15,20,30,40,50,70,100,150,200,500,1000)
 
     problems,success = [],[]
 
     for R in Rphotkm:
         print('\n*** Calculating envelope with photosphere at %d km***\n'%R)
         try:
-            r,rho,T,Linf = MakeEnvelope(R,p=p)
+            if p==0:
+                r,rho,T,Linf = MakeEnvelope(R)
+            else:
+                r,rho,T,Linf = MakeEnvelope_plot(R,p=p)
+
             success.append(R)
             write_to_file(R,[r, rho, T, pressure(rho, T), Linf])
         except:

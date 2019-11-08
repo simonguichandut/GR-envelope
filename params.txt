@@ -8,7 +8,7 @@ comp	He		[He or ..]
 
 --- Code ---
 save	1		
-img	.pdf		[.png,.pdf,.jpg]	 
+img	.png		[.png,.pdf,.jpg]	 
 
 
 
