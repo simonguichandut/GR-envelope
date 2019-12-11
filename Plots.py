@@ -89,13 +89,13 @@ for i,R in enumerate(Rphotkms):
 
     r, rho, T, P, Linf = read_from_file(R)
     Kap = kappa(rho,T)
-    Tau = Kap*rho*r*1e5
+    taustar = Kap*rho*r*1e5
 
     def myloglogplot(ax,x,y):
         ax.loglog(x,y,lw=1,label=('%d km'%R))
     
     if R in Rplot:
-        for fig,ax,x,y in zip((fig1,fig2,fig3,fig4,fig5,fig6,fig7),(ax1,ax2,ax3,ax4,ax5,ax6,ax7),(r,r,rho,r,rho,rho,r),(T,rho,T,P,Kap,Tau,Tau)):
+        for fig,ax,x,y in zip((fig1,fig2,fig3,fig4,fig5,fig6,fig7),(ax1,ax2,ax3,ax4,ax5,ax6,ax7),(r,r,rho,r,rho,rho,r),(T,rho,T,P,Kap,taustar,taustar)):
             myloglogplot(ax,x,y)
             beautify(fig,ax)
 
