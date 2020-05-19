@@ -5,10 +5,12 @@ R	12		[km]
 --- Envelope ---
 y_inner 1e8		[g/cm2]	
 comp	He		[He or ..]
+EOS     IGDE    [IG = ideal gas, IGDE = ideal gas degenerate electrons]
+FLD     1       [boolean]
 
 --- Code ---
-save	1		
-img	.png		[.png,.pdf,.jpg]	 
+save	1		[boolean]
+img	    .png	[.png,.pdf,.jpg]	 
 
 
 

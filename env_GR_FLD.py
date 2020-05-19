@@ -21,8 +21,8 @@ sigmarad = 0.25*arad*c
 
 # Parameters
 params = IO.load_params()
-if params['FLD'] == True: 
-    sys.exit('This script is for pure optically thick calculations')
+if params['FLD'] == False: 
+    sys.exit('This script is for FLD calculations')
 
 # Generate EOS class and methods
 eos = physics.EOS(params['comp'])
@@ -41,7 +41,6 @@ rg = 2*GM/c**2 # gravitationnal radius
 # ----------------------------------------- General Relativity ------------------------------------------------
 
 def Swz(r):  # Schwartzchild metric term
-    # return (1-2*GM/c**2/r)**(-0.5)     # NOTE : unlike wind_GR code, there is -1/2 exponent here
     return (1-2*GM/c**2/r)     
 
 def grav(r): # local gravity
@@ -49,6 +48,39 @@ def grav(r): # local gravity
 
 def Lcr(r,rho,T):
     return 4*np.pi*c*GM/eos.kappa(rho,T)*(1-rg/r)**(-1/2)
+
+# ----------------------- Flux-limited diffusion -----------------------------
+# Modified version of Pomraning (1983) FLD prescription.  
+# See Guichandut & Cumming (2020)
+
+def FLD_Lam(L,r,T):
+
+    if isinstance(L, (list,tuple,np.ndarray)): 
+        # for function to be able to take and return array
+        Lam = []
+        for li,ri,Ti in zip(L,r,T):
+            Lam.append(FLD_Lam(Li,ri,Ti))
+        return np.array(Lam)
+
+    else:
+        Flux = L/(4*np.pi*r**2)
+        alpha = Flux/(c*arad*T**4)  # 0 opt thick, 1 opt thin
+
+        if alpha>1:
+#            raise Exception
+#            print('causality warning : F>cE')
+            alpha=1-1e-9
+
+        Lam = 1/12 * ( (2-3*alpha) + np.sqrt(-15*alpha**2 + 12*alpha + 4) )  
+        # 1/3 thick , 0 thin
+
+        ## Quinn formula
+        # YY = Y(r,v)
+        # rho = Mdot/(4*np.pi*r**2*v*YY)
+        # Lam = 1/(3 + 2*YY/taustar(r,rho,T))
+
+        return Lam
+
 
 # ----------------------------------------- Initial conditions ------------------------------------------------
 
@@ -73,31 +105,13 @@ def photosphere(Rphot,f0):
         npoints += 10
 
     T = brentq(Teff_eq, Tkeep1, Tkeep2, xtol=1e-10, maxiter=10000)
-    rho = 2/3 * eos.mu*mp/(kB*T) * grav(Rphot)/eos.kappa(0.,T) * 10**f0          # paczynski and anderson  (assuming zero density for the opacity)
-    # rho = 3 * mu*mp/(kB*T) * grav(Rphot)/kappa(0.,T) * 10**f0           # if tau photosphere = 3
+    rho = 2/3 * eos.mu*mp/(kB*T) * grav(Rphot)/eos.kappa(0.,T) * 10**f0          
     Linf = 4*np.pi*Rphot**2*sigmarad*T**4* Swz(Rphot)
 
     return rho,T,Linf
 
-# ------------------------------------ Paczynski and Anderson derivatives --------------------------------------------
 
-def del_ad(rho,T):
-    b = eos.Beta_I(rho,T)+eos.Beta_e(rho,T)
-    return (8-6*b)/(32 -24*b - 3*b**2)
-
-def del_rad(rho, T, r):
-    pe,_,[alpha1,alpha2,f] = eos.electrons(rho,T)
-    bi,be = eos.Beta_I(rho, T), eos.Beta_e(rho, T)
-    term1 = eos.kappa(rho,T)*Linf/(16*np.pi*c*GM*(1-bi-be))*Swz(r)**(-1/2) + eos.pressure_e(rho,T)/(rho*c**2)  
-    term2 = (1 + (4-1.5*bi-((3*f-4)/(f-1))*be) * eos.pressure_e(rho,T)/(rho*c**2) )**(-1)    
-    return term1*term2    # (term1 is completely dominating, term2 could be removed)
-
-def Del(rho,T, r):
-    return min((del_ad(rho,T) , del_rad(rho,T, r)))
-
-
-
-# --------------------------------------- Wind structure equations ---------------------------------------
+# --------------------------------------- Wind structure equations (v=0) ---------------------------------------
 
 def Y(r): 
     return np.sqrt(Swz(r)) # v=0
@@ -118,8 +132,10 @@ def C_e(L, T, r, rho):
     _,_,[alpha1,_,_] = eos.electrons(rho,T)
     bi,be = eos.Beta_I(rho, T), eos.Beta_e(rho, T)
 
-    return Tstar(L, T, r, rho) * \
-            ((4-3*bi-(4-alpha1)*be)/(1-bi-be)) * arad*T**4/(3*rho)
+    Lam = FLD_Lam(L,r,T)
+
+    return 1/Y(r) * L/LEdd * eos.kappa(rho,T)/eos.kappa0 * GM/r * \
+            (1 + (bi + alpha1*be)/(12*Lam*(1-bi-be)))
 
 
 # -------------------------------------------- Calculate derivatives ---------------------------------------
@@ -150,7 +166,7 @@ def C_e(L, T, r, rho):
 
 #     return [drho_dr, dT_dr]
 
-def derivs(r,Y):
+def derivs(r,Y,Linf):
 
     # Version with the wind equations (with A,B,C) and v=0
     rho,T = Y[:2]
@@ -159,25 +175,10 @@ def derivs(r,Y):
         rho=1e-10
 
     L = Linf*Swz(r)**(-1)
+    Lam = FLD_Lam(L,r,T)
+    # print('r=%.3e \t rho=%.3e \t T=%.3e \t lam=%.3f'%(r,rho,T,Lam))
 
-    # pe,Ue,[alpha1,alpha2,f] = eos.electrons(rho,T)
-    # bi,be = eos.Beta_I(rho,T), eos.Beta_e(rho,T)
-
-    # Ae = 1 + 1.5*cs2_I(T)/c**2 + pe/(rho*c**2)*(f/(f-1) - alpha1)
-    # Be = cs2_I(T) + pe/rho*(alpha1 + alpha2*f)
-    # Ce = Swz(r)**(-1/2) * L/LEdd * kappa(rho,T)/kappa0 * GM/r * \
-    #     (1 + (bi + alpha1*be)/(4*(1-bi-be)))
-    # Tstar = L/LEdd * kappa(rho,T)/kappa0 * GM/(4*r) * 3*rho/(arad*T**4) 
-
-    # dlnT_dlnr = -Tstar-GM*Swz(r)**(-1)/(c**2*r)
-    # dlnrho_dlnr = (-GM*Swz(r)**(-1)/r*Ae + Ce)/Be
-
-    # dT_dr = T/r * dlnT_dlnr
-    # drho_dr = rho/r * dlnrho_dlnr
-
-    # return [drho_dr,dT_dr]
-
-    dlnT_dlnr = -Tstar(L, T, r, rho) - 1/Swz(r) * GM/c**2/r
+    dlnT_dlnr = -Tstar(L, T, r, rho) / (3*Lam) - 1/Swz(r) * GM/c**2/r
     dlnrho_dlnr = (-GM/Swz(r)/r * A_e(rho,T) + C_e(L,T,r,rho))/B_e(rho,T)
     
     dT_dr = T/r * dlnT_dlnr
@@ -188,7 +189,7 @@ def derivs(r,Y):
 
 # ---------------------------------------------- Integration -----------------------------------------------
 
-def Shoot(rspan, rho0, T0, returnResult=False):
+def Shoot(rspan, rho0, T0, Linf, returnResult=False):
     ''' Integrates in from the photosphere, using r as the independent variable, until T=Tbase
         We want to match the location of p=p_inner to the NS radius '''
 
@@ -200,10 +201,16 @@ def Shoot(rspan, rho0, T0, returnResult=False):
 #    def hit_zeroDensity(r, Y): return Y[0]
 #    hit_zeroDensity.terminal = False # 
 
-    def hit_innerPressure(r,Y): return eos.pressure_e(Y[0],Y[1])-P_inner
+    def hit_innerPressure(r,Y,*args): return eos.pressure_e(Y[0],Y[1])-P_inner
     hit_innerPressure.terminal = True # stop integrating at this point
 
-    sol = solve_ivp(derivs, rspan, inic, method='Radau', events = hit_innerPressure, dense_output=True)
+    def hit_lowdensity(r,Y,*args): 
+        return Y[0]-rho0/100
+    hit_lowdensity.terminal = True # stop integrating when hit small density (means about to crash)
+    
+
+    sol = solve_ivp(derivs, rspan, inic, args = (Linf,), method='Radau', 
+            events = (hit_innerPressure, hit_lowdensity), dense_output=True)
 
     return sol
 
@@ -219,23 +226,34 @@ def MakeEnvelope(Rphot_km, tol=1e-4):
 
     global Linf             # that way Linf does not have to always be a function input parameter
     Rphot = Rphot_km*1e5
-    
+
     rspan = (Rphot , 1.01*rg)                       # rspan is the integration range
     Rad,Rho,Temp = [np.array([]) for i in range(3)]       
     
     # First pass to find border values of f, and their solutions sola (gives r(y8)<RNS) and solb (r(y8)>RNS)
-    fvalues = np.linspace(-3.7,-4.5,100)
+    fvalues = np.linspace(-3.7,-4.5,200)
     for i,f0 in enumerate(fvalues):
         rho_phot,T_phot,Linf = photosphere(Rphot,f0)
-        solb = Shoot(rspan,rho_phot,T_phot) 
-        Eb = Error(solb.t)
-        # print('f=',f0,'\t success: ',solb.success,'\t error:',Eb)
-        if Eb<0:
+        solb = Shoot(rspan,rho_phot,T_phot,Linf) 
+        if len(solb.t_events[1]) == 1: 
+            # density went down and we stopped integration, so we didn't end up 
+            # landing on rb<RNS. We will still keep this solution
             a,b = fvalues[i],fvalues[i-1]
-            Ea,sola = Eb,solb
+            Ea,sola = -1,solb # -1 to have a negative value
             Eb,solb = Eprev,solprev
             break
-        Eprev,solprev = Eb,solb
+
+        else:
+            Eb = Error(solb.t)
+            print('f=',f0,'\t success: ',solb.success,'\t error:',Eb)
+
+            if Eb<0:
+                a,b = fvalues[i],fvalues[i-1]
+                Ea,sola = Eb,solb
+                Eb,solb = Eprev,solprev
+                break
+                
+            Eprev,solprev = Eb,solb
         
     def check_convergence(sola,solb,rcheck_prev):  
         ''' Checks if two solutions have similar parameters rho,T (1 part in tol^-1), some small integration distance in. 
@@ -266,12 +284,23 @@ def MakeEnvelope(Rphot_km, tol=1e-4):
     
         if count_iter == 0:  # in the first iteration, a&b represent f
             rho_phot,T_phot,Linf = photosphere(Rphot,m)
-            solm = Shoot(rspan,rho_phot,T_phot)
+            solm = Shoot(rspan,rho_phot,T_phot, Linf)
             rcheck = Rphot
+
+        if count_iter == 1:
+            print('We begin the bissection with values for the photoshere')
+            print('f = %.3e \t Linf = %.3e \t Tph = %.3e \t rhoph = %.3e'%(m,Linf,T_phot,rho_phot))
+            L = Linf*Swz(Rphot)**(-1)
+            F = L/(4*np.pi*Rphot**2)
+            alpha = F/(c*arad*T_phot**2)
+            Lam = FLD_Lam(L,Rphot,T_phot)
+            print('alpha = %.3f \t lambda = %.3f'%(alpha,Lam))
+            print('L/4pir^2sigT^4 = %.3f'%(F/sigmarad/T_phot**4))
+            input('\nenter to continue')
             
         else:                # in the other iterations, a&b represent the linear space in [rhoa,rhob] and [Ta,Tb]
             rhom,Tm = rhoa + m*(rhob-rhoa) , Ta + m*(Tb-Ta)
-            solm = Shoot(rspan,rhom,Tm)
+            solm = Shoot(rspan,rhom,Tm,Linf)
             
         # Bisection : check which side the new solution lands on and update either a or b
         Em=Error(solm.t)
