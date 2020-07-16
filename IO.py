@@ -53,7 +53,11 @@ def write_to_file(Rphotkm,env):
 
     dirname = get_name()
     path = 'results/' + dirname + '/data/'
-    filename = path + str(Rphotkm) + '.txt'
+
+    if Rphotkm >= load_params()['R']+1:
+                filename = path + str(Rphotkm) + '.txt'
+    else:
+        filename = path + str(Rphotkm).replace('.','_') + '.txt'
 
     with open(filename,'w') as f:
 
@@ -72,14 +76,26 @@ def write_to_file(Rphotkm,env):
 
 def read_from_file(Rphotkm, specific_file=None):
 
-    # output is arrays : R, rho, T, P and Linf           # R is in km!!!
+    # output is Envelope namedtuple object       
+
+    # Sometimes because of numpy coversions 13 gets converted to 13.0 for example.
+    # We have to remove these zeros else the file isn't found
+    s = str(Rphotkm)
+    if '.' in s:
+        if len(s[s.find('.')+1:]) == 1: # this counts the number of char after '.' (#decimals)
+            if s[-1]=='0':
+                Rphotkm = round(eval(s))
 
     if specific_file != None:
         filename = specific_file
     else:
         dirname = get_name()
         path = 'results/' + dirname + '/data/'
-        filename = path + str(Rphotkm) + '.txt'
+
+        if Rphotkm >= load_params()['R']+1:
+                    filename = path + str(Rphotkm) + '.txt'
+        else:
+            filename = path + str(Rphotkm).replace('.','_') + '.txt'
 
     def append_vars(line,varz): 
         l=line.split()
@@ -93,6 +109,8 @@ def read_from_file(Rphotkm, specific_file=None):
                 Linf = float(line.split()[-1])
             else:
                 append_vars(line,[r, rho, T])
+
+    r,rho,T = [np.array(var) for var in (r,rho,T)]
 
     # Return as env tuple object
     # if load_params()['FLD'] == True:
@@ -118,7 +136,7 @@ def get_phot_list():
     Rphotkms = []
     for filename in os.listdir(path):
         if filename.endswith('.txt'):
-            Rphotkms.append(eval(filename[:-4]))
+            Rphotkms.append(eval(filename[:-4].replace('_','.')))
 
     return np.sort(Rphotkms)
 
@@ -132,48 +150,45 @@ def save_plots(figs,fignames,img):
         fig.savefig(path+figname+img)
 
 
-def export_values(target='./'):
+# def export_values(target='./'):
 
-    # Export useful values for analysis for each Rphot to a text file at target directory
-    # Current values are : Linf,Rb,Tb,Rhob,Pb,Tphot,Rhophot
-    # tsound(sound crossing time) 
+#     # Export useful values for analysis for each Rphot to a text file at target directory
+#     # Current values are : Linf,Rb,Tb,Rhob,Pb,Tphot,Rhophot
+#     # tsound(sound crossing time) 
 
-    if target[-1]!='/': target += '/'
-    Rphotkms = get_phot_list()
+#     if target[-1]!='/': target += '/'
+#     Rphotkms = get_phot_list()
 
-    from scipy.interpolate import interp1d
-    from scipy.integrate import quad
+#     import physics
+#     eos = physics.EOS(load_params()['comp'])
 
-    # Parameters
-    M, RNS, y_inner, comp, save, img = load_params()
-
-    if comp == 'He':
-        Z=2
-        mu_I, mu_e, mu = 4, 2, 4/3
-
-    kB,mp = 1.380658e-16, 1.67e-24
-    def cs2(T):  # ideal gas sound speed  c_s^2  
-        return kB*T/(mu*mp)
+#     from scipy.interpolate import interp1d
+#     from scipy.integrate import quad
     
-    with open(target+'envelope_values.txt','w') as f:
+#     with open(target+'envelope_values.txt','w') as f:
 
-        f.write('{:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \n'.format(
-            'Rph (km)','Linf (erg/s)','rb (cm)','Tb (K)','rhob (g/cm3)','Pb (dyne/cm2)','Tph (K)','rhoph (g/cm3)','tsound (s)'))
+#         f.write('{:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \n'.format(
+#             'Rph (km)','Linf (erg/s)','rb (cm)','Tb (K)','rhob (g/cm3)','Pb (dyne/cm2)','Tph (K)','rhoph (g/cm3)','tsound (s)'))
 
-        for R in Rphotkms:
-            r, rho, T, P, Linf = read_from_file(R)
-            
-            cs = np.sqrt(cs2(T))/1e5  # r is in km
-            func_inverse_cs = interp1d(r,1/cs,kind='cubic')
-            tsound,err = quad(func_inverse_cs,r[0],r[-1],epsrel=1e-5)#limit=100)
-            print(tsound,err)
-    
-            f.write('%d \t\t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e\n'%
-                (R,Linf,r[0]*1e5,T[0],rho[0],P[0],T[-1],rho[-1],tsound))
+#         for R in Rphotkms:
 
+#             if R>=load_params()['R']+0.5: # not the ultra compact ones
 
-# export_values('../../compare')
+#                 print(R)
 
+#                 env = read_from_file(R)
+                
+#                 cs = np.sqrt(eos.cs2(env.T))
+#                 func_inverse_cs = interp1d(env.r,1/cs,kind='cubic')
+#                 tsound,err = quad(func_inverse_cs,env.r[0],env.r[-1],epsrel=1e-5)#limit=100)
+#                 # print(tsound,err)
+        
+#                 f.write('%0.1f \t\t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e\n'%
+#                     (R,env.Linf,env.r[0]*1e5,env.T[0],env.rho[0],eos.pressure_e(env.rho[0],env.T[0]),env.T[-1],env.rho[-1],tsound))
+
+#     print('Exported to '+target+'envelope_values.txt')
+
+# export_values('../compare')
 
 # def pickle_save(name):
     

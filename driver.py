@@ -1,9 +1,12 @@
 import sys
-from env_GR import MakeEnvelope,MakeEnvelope_plot,pressure
-from IO import load_params
-M, RNS, y_inner, comp, save, img = load_params()
+import IO
 
-def driver_envelope(Rphotkm,p=0):
+if IO.load_params()['FLD']:
+    from env_GR_FLD import MakeEnvelope
+else:
+    from env_GR import MakeEnvelope
+
+def driver_envelope(Rphotkm):
 
     from IO import write_to_file
 
@@ -13,15 +16,11 @@ def driver_envelope(Rphotkm,p=0):
     problems,success = [],[]
 
     for R in Rphotkm:
-        print('\n*** Calculating envelope with photosphere at %d km***\n'%R)
+        print('\n*** Calculating envelope with photosphere at %f km***\n'%R)
         try:
-            if p==0:
-                r,rho,T,Linf = MakeEnvelope(R)
-            else:
-                r,rho,T,Linf = MakeEnvelope_plot(R,p=p)
-
+            env = MakeEnvelope(R)
             success.append(R)
-            write_to_file(R,[r, rho, T, pressure(rho, T), Linf])
+            write_to_file(R,env)
         except:
             problems.append(R)
             print('PROBLEM WITH Rphot = %d km'%R)
@@ -51,14 +50,8 @@ if len(sys.argv)>1:
         else:
             Rphotkm = [eval(i)]
 
-    if len(sys.argv)<3:
-        driver_envelope(Rphotkm)
-    else:
-        if sys.argv[2]=='0' or sys.argv[2]=='1' or sys.argv[2]=='2':
-            p = eval(sys.argv[2])
-            driver_envelope(Rphotkm, p=p)
-        else:
-            sys.exit('To plot solution, give 1 (density) or 2 (Temperature')
+    driver_envelope(Rphotkm)
+
         
         
         

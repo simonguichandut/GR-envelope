@@ -82,10 +82,10 @@ def photosphere(Rphot,f0):
 # ------------------------------------ Paczynski and Anderson derivatives --------------------------------------------
 
 def del_ad(rho,T):
-    b = eos.Beta_I(rho,T)+eos.Beta_e(rho,T)
+    b = eos.Beta(rho,T)
     return (8-6*b)/(32 -24*b - 3*b**2)
 
-def del_rad(rho, T, r):
+def del_rad(rho, T, r, Linf):
     pe,_,[alpha1,alpha2,f] = eos.electrons(rho,T)
     bi,be = eos.Beta_I(rho, T), eos.Beta_e(rho, T)
     term1 = eos.kappa(rho,T)*Linf/(16*np.pi*c*GM*(1-bi-be))*Swz(r)**(-1/2) + eos.pressure_e(rho,T)/(rho*c**2)  
@@ -93,7 +93,7 @@ def del_rad(rho, T, r):
     return term1*term2    # (term1 is completely dominating, term2 could be removed)
 
 def Del(rho,T, r):
-    return min((del_ad(rho,T) , del_rad(rho,T, r)))
+    return min((del_ad(rho,T) , del_rad(rho,T, r, Linf)))
 
 
 
@@ -215,27 +215,43 @@ def Error(r): # Evaluate normalized error on location of the base versus NS radi
 Env = namedtuple('Env',
             ['rphot','Linf','r','T','rho'])
 
-def MakeEnvelope(Rphot_km, tol=1e-4): 
+def MakeEnvelope(Rphot_km, tol=1e-4, return_stuff=False): 
 
     global Linf             # that way Linf does not have to always be a function input parameter
     Rphot = Rphot_km*1e5
     
     rspan = (Rphot , 1.01*rg)                       # rspan is the integration range
-    Rad,Rho,Temp = [np.array([]) for i in range(3)]       
+    Rad,Rho,Temp = [np.array([]) for i in range(3)] 
+
+    stuff = [] # store items of the bisection method for the demo plot      
     
     # First pass to find border values of f, and their solutions sola (gives r(y8)<RNS) and solb (r(y8)>RNS)
-    fvalues = np.linspace(-3.7,-4.5,100)
+
+    # For photospheres at least > RNS+1km, f is not bigger than -3.5
+    if Rphot_km>=RNS+1:
+        fvalues = np.linspace(-3.5,-4.5,500)
+
+    # But apparently for ultra compact ones, say a hundred meters or less above the surface, f is much bigger
+    else:
+        fvalues = np.linspace(-1e-4,-4, 100)
+
     for i,f0 in enumerate(fvalues):
         rho_phot,T_phot,Linf = photosphere(Rphot,f0)
         solb = Shoot(rspan,rho_phot,T_phot) 
         Eb = Error(solb.t)
-        # print('f=',f0,'\t success: ',solb.success,'\t error:',Eb)
+        print('f=',f0,'\t success: ',solb.success,'\t error:',Eb)
         if Eb<0:
+            print('f=',f0,'\t suc   cess: ',solb.success,'\t error:',Eb)
             a,b = fvalues[i],fvalues[i-1]
             Ea,sola = Eb,solb
             Eb,solb = Eprev,solprev
             break
         Eprev,solprev = Eb,solb
+
+    if return_stuff:
+        stuff.append([a,sola,b,solb])
+        stuff.append([]) # will store the intermediate solutions into this list
+
         
     def check_convergence(sola,solb,rcheck_prev):  
         ''' Checks if two solutions have similar parameters rho,T (1 part in tol^-1), some small integration distance in. 
@@ -293,6 +309,10 @@ def MakeEnvelope(Rphot_km, tol=1e-4):
             Rad, Rho, Temp = np.append(Rad,rcheck), np.append(Rho,(rhoa+rhob)/2), np.append(Temp,(Ta+Tb)/2)
         
 
+            if return_stuff:
+                stuff[1].extend((sola,solb))
+
+
         # End of step 
         print('%.5f \t %d \t\t %d \t\t %.6e'%(rcheck/1e5,count_iter,count+1,Em))
         count+=1
@@ -313,7 +333,12 @@ def MakeEnvelope(Rphot_km, tol=1e-4):
     # return np.flip(Rad),np.flip(Rho),np.flip(Temp),Linf
     
     r,T,rho = np.flip(Rad),np.flip(Temp),np.flip(Rho)
-    return Env(Rphot,Linf,r,T,rho)
+
+
+    if return_stuff:
+        return Env(Rphot,Linf,r,T,rho),stuff
+    else:
+        return Env(Rphot,Linf,r,T,rho)
             
 
 

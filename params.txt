@@ -6,7 +6,7 @@ R	12		[km]
 y_inner 1e8		[g/cm2]	
 comp	He		[He or ..]
 EOS     IGDE    [IG = ideal gas, IGDE = ideal gas degenerate electrons]
-FLD     1       [boolean]
+FLD     0       [boolean]
 
 --- Code ---
 save	1		[boolean]

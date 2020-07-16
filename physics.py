@@ -79,7 +79,7 @@ class EOS:
 
     def electrons(self, rho, T):  # From Paczynski (1983) semi-analytic formula : ApJ 267 315
 
-        rY = rho/self.mu_e # rho*Ye = rho/mu)e
+        rY = rho/self.mu_e # rho*Ye = rho/mu_e
         pednr = 9.91e12 * (rY)**(5/3)     
         pedr = 1.231e15 * (rY)**(4/3)
         ped = 1/sqrt((1/pedr**2)+(1/pednr**2))
