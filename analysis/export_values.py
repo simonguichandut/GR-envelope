@@ -39,7 +39,7 @@ def export(target = "."):
                 
                 cs = np.sqrt(eos.cs2(env.T))
                 func_inverse_cs = interp1d(env.r,1/cs,kind='cubic')
-                tsound,err = quad(func_inverse_cs,env.r[0],env.r[-1],epsrel=1e-5)#limit=100)
+                tsound,err = quad(func_inverse_cs,env.r[0],env.rphot,epsrel=1e-5)#limit=100)
         
                 # Mass contained in envelope
                 rhofunc = interp1d(env.r,env.rho,kind='cubic')

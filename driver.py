@@ -8,22 +8,26 @@ else:
 
 def driver_envelope(Rphotkm):
 
-    from IO import write_to_file
+    IO.make_directories()
 
-    if Rphotkm == 'all': # a preset list of photospheric radii
-        Rphotkm = (13,15,20,30,40,50,70,100,150,200,500,1000)
+    Verbose = True
 
+    if Rphotkm == 'redo':
+        Rphotkm = IO.get_phot_list()[::-1]
+        Verbose = False
+    
     problems,success = [],[]
 
     for R in Rphotkm:
         print('\n*** Calculating envelope with photosphere at %f km***\n'%R)
         try:
-            env = MakeEnvelope(R)
+            env = MakeEnvelope(R,Verbose=Verbose)
             success.append(R)
-            write_to_file(R,env)
+            IO.write_to_file(R,env)
+            print('Rphot=%s done'%str(R))
         except:
             problems.append(R)
-            print('PROBLEM WITH Rphot = %d km'%R)
+            print('PROBLEM WITH Rphot = %.3f km'%R)
         
     print('\n\n*********************  SUMMARY *********************')
     print('Found solutions for these values : ',success)
@@ -31,24 +35,23 @@ def driver_envelope(Rphotkm):
         print('There were problems for these values : ',problems,'\n')
 
 
-
-
-
 # Command line call
-if len(sys.argv)>1:
+if __name__ == "__main__":
             
     i = sys.argv[1]
     
-    if len(i)>4 and ',' not in i:
+    if len(i)>10 and ',' not in i:
         sys.exit('Give Rphots separated by commas and no spaces')
 
     if i=='all':
         Rphotkm='all'
+    elif i=='redo':
+        Rphotkm='redo'
     else:
         if ',' in i:
             Rphotkm = [eval(x) for x in i.split(',')]
         else:
-            Rphotkm = [eval(i)]
+            Rphotkm = [eval(i),]
 
     driver_envelope(Rphotkm)
 

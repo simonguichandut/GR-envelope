@@ -51,6 +51,8 @@ def make_directories():
 def write_to_file(Rphotkm,env):
     # Expecting env type namedtuple object
 
+    assert(env.rphot/1e5==Rphotkm)
+
     dirname = get_name()
     path = 'results/' + dirname + '/data/'
 
@@ -138,7 +140,9 @@ def get_phot_list():
         if filename.endswith('.txt'):
             Rphotkms.append(eval(filename[:-4].replace('_','.')))
 
-    return np.sort(Rphotkms)
+    sorted_list = list(np.sort(Rphotkms))
+    sorted_list_clean = [int(x) if str(x)[-1]=='0' else x for x in sorted_list] # changes 15.0 to 15 for filename cleanliness
+    return sorted_list_clean
 
 
 def save_plots(figs,fignames,img):
@@ -150,55 +154,77 @@ def save_plots(figs,fignames,img):
         fig.savefig(path+figname+img)
 
 
-# def export_values(target='./'):
 
-#     # Export useful values for analysis for each Rphot to a text file at target directory
-#     # Current values are : Linf,Rb,Tb,Rhob,Pb,Tphot,Rhophot
-#     # tsound(sound crossing time) 
+######## FLD stuff
 
-#     if target[-1]!='/': target += '/'
-#     Rphotkms = get_phot_list()
+def save_rhophf0rel(Rphotkm, f0vals, rhophvalsA, rhophvalsB):
 
-#     import physics
-#     eos = physics.EOS(load_params()['comp'])
+    path = 'FLD/' + get_name()
 
-#     from scipy.interpolate import interp1d
-#     from scipy.integrate import quad
-    
-#     with open(target+'envelope_values.txt','w') as f:
+    if not os.path.exists(path):
+        os.mkdir(path)
 
-#         f.write('{:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \t {:<11s} \n'.format(
-#             'Rph (km)','Linf (erg/s)','rb (cm)','Tb (K)','rhob (g/cm3)','Pb (dyne/cm2)','Tph (K)','rhoph (g/cm3)','tsound (s)'))
+    filepath = path + '/rhophf0rel_' + str(Rphotkm) + '.txt'
+    if not os.path.exists(filepath):
+        f = open(filepath, 'w+')
+        f.write('{:<12s} \t {:<12s} \t {:<12s}\n'.format(
+                'f0', 'log10(rhophA)', 'log10(rhophB)'))
+    else:
+        f = open(filepath, 'a')
 
-#         for R in Rphotkms:
+    for f0, rhopha, rhophb in zip(f0vals, rhophvalsA, rhophvalsB):
+        f.write('{:<11.8f} \t {:<11.8f} \t {:<11.8f}\n'.format(
+                f0, np.log10(rhopha), np.log10(rhophb)))
 
-#             if R>=load_params()['R']+0.5: # not the ultra compact ones
+def load_rhophf0rel(Rphotkm):
 
-#                 print(R)
+    s = str(Rphotkm)
+    if s[-2:]=='.0': s=s[:-2]
 
-#                 env = read_from_file(R)
-                
-#                 cs = np.sqrt(eos.cs2(env.T))
-#                 func_inverse_cs = interp1d(env.r,1/cs,kind='cubic')
-#                 tsound,err = quad(func_inverse_cs,env.r[0],env.r[-1],epsrel=1e-5)#limit=100)
-#                 # print(tsound,err)
-        
-#                 f.write('%0.1f \t\t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e \t %0.6e\n'%
-#                     (R,env.Linf,env.r[0]*1e5,env.T[0],env.rho[0],eos.pressure_e(env.rho[0],env.T[0]),env.T[-1],env.rho[-1],tsound))
+    filepath = 'FLD/' + get_name() + '/rhophf0rel_' + s + '.txt'
+    if not os.path.exists(filepath):
+        return False,
 
-#     print('Exported to '+target+'envelope_values.txt')
+    else:
+        f0, rhophA, rhophB = [],[],[]
+        with open(filepath,'r') as f:
+            next(f)
+            for line in f:
+                f0.append(eval(line.split()[0]))
+                rhophA.append(10**eval(line.split()[1]))
+                rhophB.append(10**eval(line.split()[2])) # saved as log values in the file
+         
+        return True,f0,rhophA,rhophB
 
-# export_values('../compare')
 
-# def pickle_save(name):
-    
-#     # Save all arrays into pickle file
+def clean_rhophf0relfile(Rphotkm,warning=1):
 
-#     # Import Winds
-#     clean_rootfile()
-#     logMDOTS,roots = load_roots()
+    # Find duplicates, and remove all but the latest root 
+    # (assuming the last one is the correct one)
+    # Sort from lowest to biggest f0
 
-#     if not os.path.exists('pickle/'):
-#         os.mkdir('pickle/')
+    _,f0vals,rhophvalsA,rhophvalsB = load_rhophf0rel(Rphotkm)
+    new_f0vals = np.sort(np.unique(f0vals))[::-1] # largest f0 value first (to work correctly in the initial search in MakeEnvelope)
 
+    if list(new_f0vals) != list(f0vals):
+
+        v = []
+        for x in new_f0vals:
+            duplicates = np.argwhere(f0vals==x)
+            v.append(duplicates[-1][0]) # keeping the last one
+
+        new_rhophvalsA, new_rhophvalsB = [],[]
+        for i in v:
+            new_rhophvalsA.append(rhophvalsA[i])
+            new_rhophvalsB.append(rhophvalsB[i])
+
+        if warning:
+            o = input('EdotTsrel file will be overwritten. Proceed? (0 or 1) ')
+        else:
+            o = 1
+        if o:
+            filepath = 'FLD/'+get_name()+'/rhophf0rel_'+str(Rphotkm)+'.txt'
+            os.remove(filepath)
+
+            save_rhophf0rel(Rphotkm,new_f0vals,new_rhophvalsA,new_rhophvalsB)
     

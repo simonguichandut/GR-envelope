@@ -5,3 +5,5 @@
 /png
 
 analysis.py
+analysis/paper*
+analysis/thesis*

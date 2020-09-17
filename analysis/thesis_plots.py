@@ -161,7 +161,7 @@ def Make_bisection_method_plot(figsize=thesis_figsize):
         if sol.t[0]!=r0prev:
             r0prev=sol.t[0]
             # ax.plot([sol.t[0]],[sol.y[1][0]],'k.',ms=3)
-            ax.plot(sol.t,sol.y[1],'k-',lw=0.1,alpha=0.2)
+            ax.loglog(sol.t,sol.y[1],'k-',lw=0.1,alpha=0.2)
             
 
     ax.legend(frameon=False,title=r'$\log_{10}q_\mathrm{ph}$',loc=2)
@@ -359,14 +359,13 @@ def Make_L_Lcrit_plot(figsize=thesis_figsize):
 
 
 # Make_profiles_plot()
-# Make_rootsplot()
 # Make_density_temperature_plot()
 # Make_density_luminosity_plot()
 
 
 # rho-L and rho-T plots not full textwidth? Maybe 670%?
-frac = 0.7
-Make_density_temperature_plot(figsize=(frac*thesis_figsize[0],frac*thesis_figsize[1]))
+# frac = 0.7
+# Make_density_temperature_plot(figsize=(frac*thesis_figsize[0],frac*thesis_figsize[1]))
 # Make_del_plot(figsize=(frac*thesis_figsize[0],frac*thesis_figsize[1]))
 # Make_profiles_plot(figsize=(frac*thesis_figsize[0],frac*thesis_figsize[1]))
 # Make_bisection_method_plot(figsize=(frac*thesis_figsize[0],frac*thesis_figsize[1]))
