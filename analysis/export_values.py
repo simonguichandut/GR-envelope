@@ -32,7 +32,7 @@ def export(target = "."):
 
         for R in Rphotkms:
 
-            if R>=params['R']+0.5: # not the ultra compact ones
+            if R>=params['R']+1: # not the ultra compact ones
 
                 print(R)
                 env = IO.read_from_file(R)
@@ -48,7 +48,7 @@ def export(target = "."):
                     return 4*np.pi*rhofunc(r)*r**2
 
                 r0 = params['R']*1e5 + 2e2 # start integrating 2m above surface to make uniform
-                Min,err = quad(mass_in_shell, r0, env.r[-1], epsrel=1e-5, limit=500)
+                Min,err = quad(mass_in_shell, r0, env.rphot, epsrel=1e-5, limit=500)
 
                 # Write base values
                 f.write(('%0.1f \t\t' + '%0.6e \t'*5)%

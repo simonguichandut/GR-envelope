@@ -482,11 +482,11 @@ def OuterBisection(Rphotkm, rho0, T0, Linf, rend=1e9, Verbose=False, tol=1e-4, r
             # go further than rmax to give it the chance to diverge either way
 
             if solm.status == 0: # Reached rend - done
-                rho,T = update_arrays(rho,T,solm.sol,R,i0,len(R))  
+                # rho,T = update_arrays(rho,T,solm.sol,R,i0,len(R))  
                 #jf=len(R) so that it includes the last point of R
-                print('reached end of integration interval  without \
-                    necessarily converging.. perhaps wrong')
-                break
+                raise Exception('reached end of integration interval  without \
+                    reaching optically thin.. probably wrong')
+                
 
             elif solm.status == 1:
                 a,sola,sdir = m,solm,'^'
@@ -603,9 +603,14 @@ def MakeEnvelope(Rphotkm, rend=1e9, Verbose=False, tol=1e-4, return_stuff=False)
         solb = Shoot_in(rspan,rho_phot,T_phot,Linf) 
         Eb = Error(solb.t)
 
-        if i==0 and Eb<0:
-            raise Exception('Highest f0 value leads to rb<RNS, rerun get_rhophf0rel() with custom bounds')
-            
+        if i==0 and (Eb<0 or len(solb.t_events[1]) == 1):
+            # raise Exception('Highest f0 value leads to rb<RNS, rerun get_rhophf0rel() with custom bounds')
+            print('Highest f0 value leads to rb<RNS, rerun get_rhophf0rel() with custom bounds')
+            get_rhophf0rel(Rphotkm,f0min=f0vals[0],f0max=min(f0vals[0]+1,-1e-3), Verbose=Verbose, npts=15)
+            # just restart the whole function at this point
+            # return MakeEnvelope(Rphotkm, rend=rend, Verbose=Verbose, tol=tol, return_stuff=return_stuff)
+            # actually doesn't work
+            raise Exception('Call Again')
 
         if Eb<0 or len(solb.t_events[1]) == 1: 
             # Either we crossed RNS or density went down and we stopped integration, so we didn't end up 

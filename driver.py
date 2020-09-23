@@ -12,6 +12,10 @@ def driver_envelope(Rphotkm):
 
     Verbose = True
 
+    if Rphotkm == 'all':
+        Rphotkm = [20,30,40,50,60,70,80]
+        Rphotkm.append(int(IO.load_params()['R']+3))
+
     if Rphotkm == 'redo':
         Rphotkm = IO.get_phot_list()[::-1]
         Verbose = False
@@ -25,9 +29,13 @@ def driver_envelope(Rphotkm):
             success.append(R)
             IO.write_to_file(R,env)
             print('Rphot=%s done'%str(R))
-        except:
-            problems.append(R)
-            print('PROBLEM WITH Rphot = %.3f km'%R)
+
+        except Exception as E:
+            if E.__str__() == 'Call Again':
+                driver_envelope(Rphotkm)
+            else:
+                problems.append(R)
+                print('PROBLEM WITH Rphot = %.3f km'%R)
         
     print('\n\n*********************  SUMMARY *********************')
     print('Found solutions for these values : ',success)

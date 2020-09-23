@@ -3,8 +3,8 @@ M	1.4		[Msun]
 R	12		[km]
 
 --- Envelope ---
-y_inner 1e8		[g/cm2]	
-comp	He		[He or ..]
+y_inner 1e8  	[g/cm2]	
+comp    solar	[He or ..]
 EOS     IGDE    [IG = ideal gas, IGDE = ideal gas degenerate electrons]
 FLD     1       [boolean]
 
