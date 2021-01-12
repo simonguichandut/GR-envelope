@@ -14,6 +14,7 @@ def load_params(as_dict=True):
         comp = f.readline().split()[1]
         EOS_type = f.readline().split()[1]
         FLD = eval(f.readline().split()[1]) # boolean
+        Prad = f.readline().split()[1]
         next(f)
         next(f)
         save = f.readline().split()[1]
@@ -21,7 +22,7 @@ def load_params(as_dict=True):
 
     if as_dict is True:
         return {'M':M,'R':R,'y_inner':y_inner,
-                'comp':comp,'EOS_type':EOS_type,'FLD':FLD,
+                'comp':comp,'EOS_type':EOS_type,'FLD':FLD,'Prad':Prad,
                 'save':save,'img':img}
         
     return M,R,y_inner,comp,EOS_type,FLD,save,img
@@ -34,7 +35,12 @@ def get_name():  # We give various files and directories the same name correspon
         params['comp'], params['EOS_type'], ('M%.1f'%params['M']), 
         ('R%2d'%params['R']) , 
         ('y%1d'%np.log10(params['y_inner'])) ])
-    if params['FLD'] == True: name += '_FLD'
+
+    if params['FLD'] == True: 
+        name += '_FLD'
+        if params['Prad'] == 'exact':
+            name += '_exact'
+ 
     return name
 
 
@@ -45,7 +51,7 @@ def make_directories():
     if not os.path.exists(path):   # Assuming code is being run from main directory
         os.mkdir(path)
         os.mkdir(path+'/data')
-        os.mkdir(path+'/plots')
+        # os.mkdir(path+'/plots')
 
 
 def write_to_file(Rphotkm,env):

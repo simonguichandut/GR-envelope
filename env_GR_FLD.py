@@ -27,7 +27,10 @@ if params['FLD'] == False:
     sys.exit('This script is for FLD calculations')
 
 # Generate EOS class and methods
-eos = physics.EOS(params['comp'])
+if params['Prad'] == 'exact':
+    eos = physics.EOS_FLD(params['comp'])
+else:
+    eos = physics.EOS(params['comp'])
 
 # Mass-dependent parameters
 M,RNS,y_inner = params['M'],params['R'],params['y_inner']
@@ -55,29 +58,27 @@ def Lcr(r,rho,T):
 # Modified version of Pomraning (1983) FLD prescription.  
 # See Guichandut & Cumming (2020)
 
-def FLD_Lam(L,r,T):
+def FLD_Lam(L,r,T,return_params=False):
 
     # L is the local luminosity. In envelopes, Linf is constant, L=Linf*(1-rs/r)**(-1)
 
+    Flux = L/(4*np.pi*r**2)
+    alpha = Flux/(c*arad*T**4)  # 0 opt thick, 1 opt thin
+
     if isinstance(L, (list,tuple,np.ndarray)): 
-        # for function to be able to take and return array
-        Lam = []
-        for li,ri,ti in zip(L,r,T):
-            Lam.append(FLD_Lam(li,ri,ti))
-        return np.array(Lam)
-
+        if len(alpha[alpha>1])>0:
+            raise Exception("Causality warning F>cE at %d locations"%len(alpha[alpha>1]))
     else:
-        Flux = L/(4*np.pi*r**2)
-        alpha = Flux/(c*arad*T**4)  # 0 opt thick, 1 opt thin
-
         if alpha>1:
-#            raise Exception
             # print('causality warning : F>cE')
             alpha=1-1e-9
 
-        Lam = 1/12 * ( (2-3*alpha) + np.sqrt(-15*alpha**2 + 12*alpha + 4) )  
-        # 1/3 thick , 0 thin
+    Lam = 1/12 * ( (2-3*alpha) + np.sqrt(-15*alpha**2 + 12*alpha + 4) )  # 1/3 thick , 0 thin
+    R = alpha/Lam # 0 thick, 1/lam->inf thin
 
+    if return_params:
+        return Lam,alpha,R
+    else:
         return Lam
 
 
@@ -138,16 +139,16 @@ def B_e(rho,T):
     return eos.cs2_I(T) + pe/rho*(alpha1 + alpha2*f)
 
 def C(L,T,r,rho):
-    b = eos.Beta(rho,T)
-    Lam = FLD_Lam(L,r,T)
+    Lam,_,R = FLD_Lam(L,r,T,return_params=True)
+    b = eos.Beta(rho,T, lam=Lam, R=R)
     return 1/Y(r) * L/LEdd * eos.kappa(rho,T)/eos.kappa0 * GM/r * \
             (1 + b/(12*Lam*(1-b)))
 
 def C_e(L, T, r, rho):  
-    _,_,[alpha1,_,_] = eos.electrons(rho,T)
-    bi,be = eos.Beta_I(rho, T), eos.Beta_e(rho, T)
 
-    Lam = FLD_Lam(L,r,T)
+    Lam,_,R = FLD_Lam(L,r,T,return_params=True)
+    _,_,[alpha1,_,_] = eos.electrons(rho,T)
+    bi,be = eos.Beta_I(rho, T, lam=Lam, R=R), eos.Beta_e(rho, T, lam=Lam, R=R)
 
     return 1/Y(r) * L/LEdd * eos.kappa(rho,T)/eos.kappa0 * GM/r * \
             (1 + (bi + alpha1*be)/(12*Lam*(1-bi-be)))
@@ -186,9 +187,12 @@ def drho_thin(r,rho,Linf):
     L = Linf*Swz(r)**(-1)
     T = T_thin(Linf,r)
 
+    Flux = L/(4*np.pi*r**2)
+    alpha = Flux/(c*arad*T**4)  
+
     # Lam = eos.kappa(rho,T)*rho*r/2/Y(r)  # optically thin limit of lambda (it's not exactly zero)
     Lam = eos.kappa0*rho*r/2/Y(r)  # optically thin limit of lambda (it's not exactly zero)
-    b = eos.Beta(rho,T)
+    b = eos.Beta(rho,T, lam=Lam, R=alpha/Lam)
     C =  1/Y(r) * L/LEdd * eos.kappa(rho,T)/eos.kappa0 * GM/r * (1 + b/(12*Lam*(1-b)))
 
     dlnrho_dlnr = (-GM/Swz(r)/r * A(T) + C)/B(T)
@@ -203,7 +207,7 @@ def Shoot_in(rspan, rho0, T0, Linf):
 
     inic = [rho0, T0]
 
-    def hit_innerPressure(r,Y,*args): return eos.pressure_e(Y[0],Y[1])-P_inner
+    def hit_innerPressure(r,Y,*args): return eos.pressure_e(Y[0],Y[1], lam=1/3, R=0)-P_inner
     hit_innerPressure.terminal = True # stop integrating at this point
 
     def hit_lowdensity(r,Y,*args): 
@@ -319,7 +323,7 @@ def get_rhophf0rel(Rphotkm, rend=1e9, tol=1e-6, Verbose=0, f0min=-4.5, f0max=-3.
         step = 0.5 # 50% update
         b = a
         while True:
-            b *= 1 + direction*step  # either *1.1 or *0.9
+            b *= 1 + direction*step  # either *1.5 or *0.5
             # solb = solve_ivp(derivs, (Rphotkm*1e5,1e9), (b,Tph), args=(Linf,), 
             #                 events=(hit_zero_density), method='Radau', dense_output=True, rtol=tol)
             solb = Shoot_out(rspan=rspan, rho0=b, T0=Tph, Linf=Linf)
@@ -677,8 +681,7 @@ def MakeEnvelope(Rphotkm, rend=1e9, Verbose=False, tol=1e-4, return_stuff=False)
     f0 = b
 
     r,rho,T = [np.array([]) for i in range(3)]       
-
-    if Verbose: print('Radius (km) \t Step # \t Iter count \t RNS error')    
+ 
     while abs(Em)>tol:   # we can stop when the final radius is the neutron star radius close to one part in 10^5
         
         # middle point.  In the first integration, a&b are the f values.  In the rest, a&b are between 0 and 1. For interpolation
@@ -704,6 +707,7 @@ def MakeEnvelope(Rphotkm, rend=1e9, Verbose=False, tol=1e-4, return_stuff=False)
             if Verbose:
                 print('alpha = %.3f \t lambda = %.3f'%(alpha,Lam))
                 print('L/4pir^2sigT^4 = %.3f'%(F/sigmarad/T_phot**4))
+                print('\nRadius (km) \t Step # \t Iter count \t RNS error')   
         
             
         # Bisection : check which side the new solution lands on and update either a or b
