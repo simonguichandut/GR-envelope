@@ -32,7 +32,7 @@ def export(target = "."):
 
         for R in Rphotkms:
 
-            if R>=params['R']+1: # not the ultra compact ones
+            if R>=params['R']+0.1: # not the ultra compact ones
 
                 print(R)
                 env = IO.read_from_file(R)
@@ -55,8 +55,9 @@ def export(target = "."):
                     (R,env.Linf,env.r[0],env.T[0],env.rho[0],eos.pressure_e(env.rho[0],env.T[0])))
                 
                 # Write photoshere values 
+                iphot = list(env.r).index(R*1e5) if params['FLD'] == True else -1
                 f.write(('%0.6e \t'*2)%
-                    (env.T[-1],env.rho[-1]))
+                    (env.T[iphot],env.rho[iphot]))
 
                 # Timescales
                 f.write(('%0.6e \t')%
